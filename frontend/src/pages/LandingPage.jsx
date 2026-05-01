@@ -1,9 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Zap, CheckCircle, BarChart3, Users, Lock } from 'lucide-react';
 
 const LandingPage = () => {
+  const [loginType, setLoginType] = useState(null); // null, 'admin', or 'bidder'
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    city: ''
+  });
+  const navigate = useNavigate();
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    if (loginType === 'admin') {
+      localStorage.setItem('adminUser', JSON.stringify({
+        username: formData.username,
+        email: formData.email,
+        city: formData.city
+      }));
+      navigate('/admin/dashboard');
+    } else {
+      localStorage.setItem('bidderUser', JSON.stringify({
+        username: formData.username,
+        email: formData.email
+      }));
+      navigate('/bidder/dashboard');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navbar */}
@@ -18,8 +49,8 @@ const LandingPage = () => {
           <a href="#security" className="hover:text-blue-600 transition-colors">Security</a>
         </div>
         <div className="flex gap-4">
-          <Link to="/bidder/login" className="btn-secondary py-2">Bidder Login</Link>
-          <Link to="/admin/dashboard" className="btn-primary py-2">Admin Portal</Link>
+          <button onClick={() => setLoginType('bidder')} className="btn-secondary py-2">Bidder Login</button>
+          <button onClick={() => setLoginType('admin')} className="btn-primary py-2">Admin Portal</button>
         </div>
       </nav>
 
@@ -56,8 +87,18 @@ const LandingPage = () => {
             transition={{ delay: 0.3 }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Link to="/admin/dashboard" className="btn-primary text-lg">Get Started as Admin</Link>
-            <Link to="/bidder/apply" className="btn-secondary text-lg">Apply for Tenders</Link>
+            <button 
+              onClick={() => setLoginType('admin')} 
+              className="btn-primary text-lg"
+            >
+              Get Started as Admin
+            </button>
+            <button 
+              onClick={() => setLoginType('bidder')} 
+              className="btn-secondary text-lg"
+            >
+              Apply for Tenders
+            </button>
           </motion.div>
         </div>
 
@@ -69,14 +110,97 @@ const LandingPage = () => {
           className="mt-20 max-w-6xl mx-auto relative"
         >
           <div className="absolute -inset-4 bg-blue-500/10 blur-3xl rounded-[3rem] -z-10"></div>
-          <div className="glass-card overflow-hidden border-slate-200 shadow-2xl">
-            <img 
-              src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=2070" 
-              alt="Dashboard Preview" 
-              className="w-full h-auto opacity-90"
-            />
+          <div className="glass-card overflow-hidden border-slate-200 shadow-2xl min-h-[500px] flex items-center justify-center">
+            {!loginType ? (
+              <img 
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=2070" 
+                alt="Dashboard Preview" 
+                className="w-full h-auto opacity-90"
+              />
+            ) : (
+              <motion.div 
+                key={loginType}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-10 w-full max-w-md"
+              >
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold text-slate-800">
+                    {loginType === 'admin' ? 'Admin Login' : 'Bidder Login'}
+                  </h2>
+                  <p className="text-slate-500 mt-2">
+                    {loginType === 'admin' ? 'Secure access to SHAKTI AI Panel' : 'Access your tender applications'}
+                  </p>
+                </div>
+                <form onSubmit={handleLoginSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Username</label>
+                    <input 
+                      type="text" 
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" 
+                      placeholder="Enter username" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address</label>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" 
+                      placeholder="Enter your email" 
+                    />
+                  </div>
+                  {loginType === 'admin' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+                        <input 
+                          type="password" 
+                          name="password"
+                          value={formData.password}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" 
+                          placeholder="••••••••" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">City</label>
+                        <input 
+                          type="text" 
+                          name="city"
+                          value={formData.city}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" 
+                          placeholder="Enter city" 
+                        />
+                      </div>
+                    </>
+                  )}
+                  <button type="submit" className="w-full btn-primary py-4 text-lg mt-4">
+                    {loginType === 'admin' ? 'Login to Dashboard' : 'Enter Bidder Portal'}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setLoginType(null)}
+                    className="w-full text-slate-400 text-sm hover:text-slate-600 transition-colors"
+                  >
+                    Go Back
+                  </button>
+                </form>
+              </motion.div>
+            )}
           </div>
         </motion.div>
+
       </section>
 
       {/* Features */}
