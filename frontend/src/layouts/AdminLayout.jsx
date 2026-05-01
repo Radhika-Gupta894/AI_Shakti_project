@@ -64,6 +64,15 @@ const Sidebar = () => {
 };
 
 const Header = () => {
+  const [user, setUser] = React.useState({ username: 'Admin User', city: 'CRPF Officer' });
+
+  React.useEffect(() => {
+    const storedUser = localStorage.getItem('adminUser');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
   return (
     <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 fixed top-0 right-0 left-64 z-10 px-8 flex items-center justify-between">
       <div className="flex items-center gap-4 text-slate-400">
@@ -79,11 +88,11 @@ const Header = () => {
         </div>
         <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
           <div className="text-right">
-            <p className="text-sm font-semibold text-slate-800">Admin User</p>
-            <p className="text-xs text-slate-400">CRPF Officer</p>
+            <p className="text-sm font-semibold text-slate-800">{user.username}</p>
+            <p className="text-xs text-slate-400">{user.city || 'CRPF Officer'}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
-            <img src="https://ui-avatars.com/api/?name=Admin+User&background=1e3a8a&color=fff" alt="Avatar" />
+            <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=1e3a8a&color=fff`} alt="Avatar" />
           </div>
         </div>
       </div>
