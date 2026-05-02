@@ -3,113 +3,165 @@ import json
 import google.generativeai as genai
 from typing import Dict, Any
 
-# Configure Gemini (or OpenAI if preferred)
-# In a real app, these would be in .env
-GENIMI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_API_KEY")
-genai.configure(api_key=GENIMI_API_KEY)
-
 class AIService:
     def __init__(self):
+        # Configure Gemini inside init to ensure env vars are loaded
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        if not self.api_key:
+            print("CRITICAL: GEMINI_API_KEY not found in environment variables.")
+        genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     async def extract_tender_criteria(self, text: str) -> Dict[str, Any]:
         """
         Analyze tender document text to extract technical, financial, and compliance criteria.
+        Uses advanced prompting for high-precision extraction.
         """
         prompt = f"""
-        Analyze the following tender document text and extract the eligibility criteria.
-        Return the result as a structured JSON object with the following keys:
-        - technical_criteria: List of requirements related to experience, capacity, etc.
-        - financial_criteria: List of requirements related to turnover, bank balance, etc.
-        - compliance_criteria: List of mandatory certificates like GST, ISO, PAN.
-        - deadlines: Key dates found.
+        System: You are an expert procurement analyst for the CRPF (Central Reserve Police Force). 
+        Task: Extract specific eligibility criteria from the provided tender document text.
         
-        For each criterion, specify:
-        - name: Short name.
-        - description: Full requirement text.
-        - mandatory: Boolean.
-        - threshold: Any numeric value associated (e.g., turnover amount).
+        Rules:
+        1. Only return valid JSON.
+        2. Categorize requirements into 'technical', 'financial', and 'compliance'.
+        3. For 'financial', look for turnover, liquid assets, and bank guarantees.
+        4. For 'technical', look for past experience, project completions, and machinery.
+        5. For 'compliance', look for GST, ISO, MSME, blacklisting, and local registration.
+        
+        JSON Structure:
+        {{
+            "technical_criteria": [
+                {{"name": "string", "description": "string", "mandatory": boolean, "threshold": "string or number"}}
+            ],
+            "financial_criteria": [
+                {{"name": "string", "description": "string", "mandatory": boolean, "threshold": "string or number"}}
+            ],
+            "compliance_criteria": [
+                {{"name": "string", "description": "string", "mandatory": boolean}}
+            ],
+            "deadlines": [
+                {{"event": "string", "date": "string"}}
+            ]
+        }}
 
-        Tender Text:
-        {text[:15000]} # Limiting text size for prompt
+        Tender Text Content:
+        ---
+        {text[:15000]}
+        ---
         """
         
         try:
             response = self.model.generate_content(prompt)
-            # Find the JSON part in the response
             content = response.text
-            start_idx = content.find('{')
-            end_idx = content.rfind('}') + 1
-            return json.loads(content[start_idx:end_idx])
+            # Clean possible markdown formatting from response
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+                
+            return json.loads(content.strip())
         except Exception as e:
             print(f"AI Extraction Error: {e}")
             return {
                 "technical_criteria": [],
                 "financial_criteria": [],
                 "compliance_criteria": [],
-                "error": str(e)
+                "deadlines": [],
+                "error": "Failed to parse AI response"
             }
 
     async def evaluate_bidder_docs(self, criteria: Dict[str, Any], bidder_text: str) -> Dict[str, Any]:
         """
-        Compare bidder documents against tender criteria.
+        Compare bidder documents against tender criteria using advanced reasoning.
         """
         prompt = f"""
-        You are an expert procurement officer. Evaluate the bidder's documents against the given tender criteria.
+        System: You are an expert CRPF Auditor. Evaluate the bidder's document text against the provided tender criteria.
         
         Tender Criteria:
         {json.dumps(criteria, indent=2)}
         
-        Bidder Document Content:
+        Bidder Text Content:
+        ---
         {bidder_text[:15000]}
-        
-        Evaluate each criterion and return a JSON object with:
-        - results: List of objects containing:
-            - criterion_name: Name of criterion.
-            - status: "PASS", "FAIL", or "REVIEW".
-            - extracted_value: What you found in bidder docs.
-            - required_value: What was required.
-            - reasoning: Why it passed or failed.
-            - source_snippet: Short text snippet from bidder docs as proof.
-            - confidence: 0 to 1 score.
-        - overall_status: "PASS", "FAIL", or "REVIEW".
-        - risk_score: 0 to 100.
-        - summary: Overall evaluation summary.
+        ---
 
-        Be strict but fair. If a value is missing or unclear, set status to "REVIEW".
+        Task: Check every item in technical, financial, and compliance criteria.
+        
+        JSON Response Format:
+        {{
+            "results": [
+                {{
+                    "criterion_name": "string",
+                    "status": "PASS" | "FAIL" | "REVIEW",
+                    "reasoning": "Detailed explanation of why it passed or failed",
+                    "source_snippet": "The exact quote from the document used as proof",
+                    "confidence": 0.0 to 1.0,
+                    "extracted_value": "The specific value found (e.g. 'Turnover was 8 Cr')"
+                }}
+            ],
+            "overall_status": "PASS" | "FAIL" | "REVIEW",
+            "risk_score": 0 to 100,
+            "summary": "High-level summary of the entire evaluation"
+        }}
+
+        Rules:
+        1. If a document is missing or the information is unclear, use "REVIEW".
+        2. Be strict about threshold values.
+        3. Only return JSON.
         """
         
         try:
             response = self.model.generate_content(prompt)
             content = response.text
-            start_idx = content.find('{')
-            end_idx = content.rfind('}') + 1
-            return json.loads(content[start_idx:end_idx])
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+                
+            return json.loads(content.strip())
         except Exception as e:
             print(f"AI Evaluation Error: {e}")
-            return {"results": [], "overall_status": "REVIEW", "error": str(e)}
+            return {
+                "results": [], 
+                "overall_status": "REVIEW", 
+                "risk_score": 100, 
+                "summary": "Evaluation failed due to system error."
+            }
 
     async def detect_fraud(self, bidders_data: list) -> Dict[str, Any]:
         """
-        Analyze multiple bidders for suspicious patterns.
+        Analyze multiple bidders for suspicious patterns and collusion.
         """
         prompt = f"""
-        Analyze these bidders for potential collusion or fraud.
-        Check for:
-        - Similar document structure.
-        - Overlapping directors (if data present).
-        - Same contact details or address.
+        System: You are an expert fraud investigator for government procurement.
+        Task: Analyze the provided bidder data for signs of collusion, bid-rigging, or document forgery.
+        
+        Indicators to check:
+        1. Identical phrases or typos across different bidders' documents.
+        2. Same physical address or contact details.
+        3. Overlapping board of directors or owners.
+        4. Sequential bank guarantee numbers.
         
         Bidders Data:
         {json.dumps(bidders_data, indent=2)}
         
-        Return a JSON with fraud_alerts list and overall risk scores.
+        Return a JSON object:
+        {{
+            "fraud_alerts": [
+                {{"bidder_name": "string", "risk_level": "LOW" | "MEDIUM" | "HIGH", "reason": "string", "confidence": 0.0 to 1.0}}
+            ],
+            "overall_collusion_risk": 0 to 100
+        }}
         """
         try:
             response = self.model.generate_content(prompt)
             content = response.text
-            start_idx = content.find('{')
-            end_idx = content.rfind('}') + 1
-            return json.loads(content[start_idx:end_idx])
-        except Exception:
-            return {"fraud_alerts": []}
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+                
+            return json.loads(content.strip())
+        except Exception as e:
+            print(f"Fraud Detection Error: {e}")
+            return {"fraud_alerts": [], "overall_collusion_risk": 0}

@@ -1,13 +1,15 @@
-from sqlalchemy import Column, Integer, String, JSON, DateTime
-from sqlalchemy.sql import func
-from database.config import Base
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from database.base import Base
+import datetime
 
 class Tender(Base):
     __tablename__ = "tenders"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    reference_no = Column(String, unique=True, index=True)
-    document_path = Column(String)
-    extracted_criteria = Column(JSON) # Store Technical, Financial, Compliance, Mandatory
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    title = Column(String, index=True, nullable=False)
+    description = Column(Text)
+    tender_number = Column(String, unique=True)
+    file_path = Column(String)
+    criteria = Column(JSON)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    status = Column(String, default="active") # active, closed, under_evaluation

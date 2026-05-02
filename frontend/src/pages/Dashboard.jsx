@@ -16,10 +16,17 @@ import { Users, FileText, CheckCircle2, AlertTriangle, TrendingUp, Loader2 } fro
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
+const colorClasses = {
+  blue: 'bg-blue-50 text-blue-600',
+  amber: 'bg-amber-50 text-amber-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  indigo: 'bg-indigo-50 text-indigo-600',
+};
+
 const StatCard = ({ title, value, sub, icon: Icon, color, loading }) => (
   <div className="glass-card p-6 border-slate-100 shadow-sm">
     <div className="flex justify-between items-start mb-4">
-      <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}>
+      <div className={`p-3 rounded-xl ${colorClasses[color] || colorClasses.blue}`}>
         <Icon size={24} />
       </div>
       <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">+12%</span>

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
-from database.config import get_db
-from models.models import Tender, Bidder, BidderDocument, Evaluation, AuditLog, User
+from database.db import get_db
+from models import Tender, Bidder, BidderDocument, Evaluation, AuditLog, User
+# Note: BidderDocument might need to be moved to its own file or added to models/__init__.py
 from services.evaluator import process_tender_upload, process_bidder_evaluation
 from services.ai_service import AIService
 import shutil
@@ -71,9 +72,17 @@ async def upload_bidder_doc(
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
+    # Ensure bidder exists (for demo, we create if not exists)
+    bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
+    if not bidder:
+        bidder = Bidder(id=bidder_id, company_name=f"Bidder {bidder_id}")
+        db.add(bidder)
+        db.commit()
+        db.refresh(bidder)
+
     file_id = str(uuid.uuid4())
     file_ext = os.path.splitext(file.filename)[1]
-    file_path = os.path.join(UPLOAD_DIR, f"bidder_{bidder_id}_doc_{file_id}{file_ext}")
+    file_path = os.path.join(UPLOAD_DIR, f"bidder_{bidder_id}_{file_id}{file_ext}")
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -88,7 +97,35 @@ async def upload_bidder_doc(
     db.commit()
     db.refresh(new_doc)
     
-    return {"status": "success", "document_id": new_doc.id}
+    return {"id": new_doc.id, "message": "Document uploaded successfully"}
+
+@api_router.get("/tenders/latest")
+async def get_latest_tender(db: Session = Depends(get_db)):
+    tender = db.query(Tender).order_by(Tender.id.desc()).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="No tenders found")
+    return tender
+
+
+
+@api_router.get("/evaluations")
+async def get_evaluations(db: Session = Depends(get_db)):
+    # Join with Bidder and Tender to get names
+    evaluations = db.query(Evaluation).all()
+    results = []
+    for e in evaluations:
+        bidder = db.query(Bidder).filter(Bidder.id == e.bidder_id).first()
+        tender = db.query(Tender).filter(Tender.id == e.tender_id).first()
+        results.append({
+            "id": e.id,
+            "bidder_name": bidder.company_name if bidder else "Unknown",
+            "tender_title": tender.title if tender else "Unknown",
+            "status": e.status,
+            "ai_score": e.confidence_score,
+            "risk_level": e.risk_level,
+            "submission_date": e.created_at.strftime("%Y-%m-%d")
+        })
+    return results
 
 
 @api_router.post("/evaluate-bidder")

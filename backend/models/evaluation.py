@@ -1,20 +1,21 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, JSON
 from sqlalchemy.orm import relationship
-from database.config import Base
+from database.base import Base
+import datetime
 
 class Evaluation(Base):
     __tablename__ = "evaluations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     bidder_id = Column(Integer, ForeignKey("bidders.id"))
-    criterion_name = Column(String)
-    required_value = Column(String)
-    found_value = Column(String)
-    source_document = Column(String)
-    status = Column(String) # PASS, FAIL, REVIEW
+    tender_id = Column(Integer, ForeignKey("tenders.id"))
+    criterion = Column(String, nullable=True) # Making it optional to match original
+    status = Column(String) # pass, fail, pending
     confidence_score = Column(Float)
-    reason = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    bidder = relationship("Bidder", back_populates="evaluations")
+    risk_level = Column(String) # LOW, MEDIUM, HIGH
+    reason = Column(Text)
+    detailed_report = Column(JSON)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    bidder = relationship("Bidder", backref="evaluations")
+    tender = relationship("Tender", backref="evaluations")
