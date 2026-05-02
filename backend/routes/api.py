@@ -44,6 +44,67 @@ async def get_tenders(db: Session = Depends(get_db)):
     tenders = db.query(Tender).all()
     return tenders
 
+@api_router.get("/tenders/latest")
+async def get_latest_tender(db: Session = Depends(get_db)):
+    tender = db.query(Tender).order_by(Tender.id.desc()).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="No tenders found")
+    return tender
+
+@api_router.post("/upload-bidder-doc")
+async def upload_bidder_doc(
+    bidder_id: int, 
+    tender_id: int, 
+    document_type: str, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    # Ensure bidder exists (for demo, we create if not exists)
+    bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
+    if not bidder:
+        bidder = Bidder(id=bidder_id, name=f"Bidder {bidder_id}")
+        db.add(bidder)
+        db.commit()
+        db.refresh(bidder)
+
+    file_id = str(uuid.uuid4())
+    file_ext = os.path.splitext(file.filename)[1]
+    file_path = os.path.join(UPLOAD_DIR, f"bidder_{bidder_id}_{file_id}{file_ext}")
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    new_doc = BidderDocument(
+        bidder_id=bidder_id,
+        tender_id=tender_id,
+        document_type=document_type,
+        file_path=file_path
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+    
+    return {"id": new_doc.id, "message": "Document uploaded successfully"}
+
+@api_router.get("/evaluations")
+async def get_evaluations(db: Session = Depends(get_db)):
+    # Join with Bidder and Tender to get names
+    evaluations = db.query(Evaluation).all()
+    results = []
+    for e in evaluations:
+        bidder = db.query(Bidder).filter(Bidder.id == e.bidder_id).first()
+        tender = db.query(Tender).filter(Tender.id == e.tender_id).first()
+        results.append({
+            "id": e.id,
+            "bidder_name": bidder.name if bidder else "Unknown",
+            "tender_title": tender.title if tender else "Unknown",
+            "status": e.status,
+            "ai_score": e.confidence_score,
+            "risk_level": e.risk_level,
+            "submission_date": e.created_at.strftime("%Y-%m-%d")
+        })
+    return results
+
 
 @api_router.post("/evaluate-bidder")
 async def evaluate_bidder(tender_id: int, bidder_id: int, db: Session = Depends(get_db)):

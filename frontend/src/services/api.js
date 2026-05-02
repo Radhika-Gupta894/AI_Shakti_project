@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 120000, // 120 seconds for long AI tasks
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,6 +38,8 @@ export const apiService = {
 
   getTenders: () => api.get('/tenders'),
 
+  getLatestTender: () => api.get('/tenders/latest'),
+
   // Bidder APIs
   uploadBidderDocument: (bidderId, tenderId, docType, file, onUploadProgress) => {
     const formData = new FormData();
@@ -60,6 +63,8 @@ export const apiService = {
   getEvaluationReport: (id) => api.get(`/evaluation-report/${id}`),
 
   getDashboardStats: () => api.get('/dashboard-stats'),
+
+  getEvaluations: () => api.get('/evaluations'),
 
   getFraudDetection: () => api.get('/fraud-detection'),
 
