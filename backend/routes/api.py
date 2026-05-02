@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from database.config import get_db
 from models.models import Tender, Bidder, BidderDocument, Evaluation, AuditLog, User
@@ -37,12 +37,58 @@ async def upload_tender(file: UploadFile = File(...), db: Session = Depends(get_
     db.commit()
     db.refresh(new_tender)
     
-    return {"id": new_tender.id, "criteria": new_tender.criteria}
+    return {
+        "id": new_tender.id, 
+        "tender_name": new_tender.title,
+        "status": "Uploaded",
+        "criteria": new_tender.criteria
+    }
 
 @api_router.get("/tenders")
 async def get_tenders(db: Session = Depends(get_db)):
     tenders = db.query(Tender).all()
-    return tenders
+    # Map 'title' to 'tender_name' for consistency with user request if needed, 
+    # but frontend is already using .title based on my TenderList implementation.
+    # I'll add 'tender_name' as an extra field for compatibility.
+    result = []
+    for t in tenders:
+        result.append({
+            "id": t.id,
+            "title": t.title,
+            "tender_name": t.title,
+            "tender_number": t.tender_number,
+            "status": t.status,
+            "created_at": t.created_at,
+            "file_path": t.file_path
+        })
+    return result
+
+@api_router.post("/upload-bidder-doc")
+async def upload_bidder_doc(
+    bidder_id: int = Form(...), 
+    tender_id: int = Form(...), 
+    document_type: str = Form(...), 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    file_id = str(uuid.uuid4())
+    file_ext = os.path.splitext(file.filename)[1]
+    file_path = os.path.join(UPLOAD_DIR, f"bidder_{bidder_id}_doc_{file_id}{file_ext}")
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    new_doc = BidderDocument(
+        bidder_id=bidder_id,
+        tender_id=tender_id,
+        document_type=document_type,
+        file_path=file_path
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+    
+    return {"status": "success", "document_id": new_doc.id}
 
 
 @api_router.post("/evaluate-bidder")

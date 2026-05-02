@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import BidderLayout from '../layouts/BidderLayout';
 import { FileUp, CheckCircle, AlertCircle, Trash2, Info, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
+import { useParams } from 'react-router-dom';
 
 const DocumentUpload = ({ label, type, bidderId, tenderId, docType, onUploadSuccess }) => {
   const [file, setFile] = useState(null);
@@ -83,7 +84,23 @@ const DocumentUpload = ({ label, type, bidderId, tenderId, docType, onUploadSucc
 };
 
 const ApplyTender = () => {
+  const { id } = useParams();
+  const [tender, setTender] = useState(null);
   const [uploadedDocs, setUploadedDocs] = useState([]);
+
+  useEffect(() => {
+    // Fetch tender details if needed, or just use the ID
+    const fetchTenderDetails = async () => {
+      try {
+        const response = await apiService.getTenders();
+        const found = response.data.find(t => t.id === parseInt(id));
+        if (found) setTender(found);
+      } catch (err) {
+        console.error("Failed to fetch tender details", err);
+      }
+    };
+    fetchTenderDetails();
+  }, [id]);
 
   const handleUploadSuccess = (type) => {
     setUploadedDocs(prev => [...prev, type]);
@@ -95,7 +112,7 @@ const ApplyTender = () => {
         <div className="mb-8 flex justify-between items-end">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Apply to Tender</h2>
-            <p className="text-slate-500">Tender #CRPF-2026-0982: Supply of Tactical Gear</p>
+            <p className="text-slate-500">{tender ? tender.title : `Tender #${id}`}</p>
           </div>
           <div className="text-right">
              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Deadline</span>
@@ -122,7 +139,7 @@ const ApplyTender = () => {
             type="PDF/Image" 
             docType="GST" 
             bidderId={1} 
-            tenderId={1} 
+            tenderId={id} 
             onUploadSuccess={handleUploadSuccess} 
           />
           <DocumentUpload 
@@ -130,7 +147,7 @@ const ApplyTender = () => {
             type="PDF/Image" 
             docType="ISO" 
             bidderId={1} 
-            tenderId={1} 
+            tenderId={id} 
             onUploadSuccess={handleUploadSuccess} 
           />
           <DocumentUpload 
@@ -138,7 +155,7 @@ const ApplyTender = () => {
             type="PDF" 
             docType="Financial" 
             bidderId={1} 
-            tenderId={1} 
+            tenderId={id} 
             onUploadSuccess={handleUploadSuccess} 
           />
         </div>

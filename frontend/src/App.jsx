@@ -15,6 +15,7 @@ import FinalReport from './pages/FinalReport';
 // Bidder Pages
 import ApplyTender from './pages/ApplyTender';
 import BidderStatus from './pages/BidderStatus';
+import TenderList from './pages/TenderList';
 
 function App() {
   return (
@@ -37,9 +38,9 @@ function App() {
 
         {/* Bidder Routes */}
         <Route path="/bidder/dashboard" element={<BidderStatus />} />
-        <Route path="/bidder/apply" element={<ApplyTender />} />
+        <Route path="/bidder/tenders" element={<TenderList />} />
+        <Route path="/bidder/apply/:id" element={<ApplyTender />} />
         <Route path="/bidder/status" element={<BidderStatus />} />
-        <Route path="/bidder/tenders" element={<ApplyTender />} /> {/* Placeholder */}
         <Route path="/bidder/applications" element={<BidderStatus />} />
         <Route path="/bidder/messages" element={<BidderStatus />} />
       </Routes>
