@@ -7,7 +7,10 @@ class Bidder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String, index=True, nullable=False)
-    gst_number = Column(String, unique=True, nullable=False)
+    gst_number = Column(String, index=True, nullable=False) # Removed unique=True to allow detecting duplicates
+    phone = Column(String, index=True)
+    address = Column(String)
+    email = Column(String)
     turnover = Column(Float)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -18,5 +21,6 @@ class BidderDocument(Base):
     tender_id = Column(Integer, ForeignKey("tenders.id"))
     document_type = Column(String) # 'GST', 'ISO', 'Financial', 'Experience'
     file_path = Column(String)
+    file_hash = Column(String, index=True) # For duplicate document detection
     extracted_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

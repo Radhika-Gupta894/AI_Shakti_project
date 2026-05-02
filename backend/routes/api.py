@@ -180,16 +180,29 @@ async def get_stats(db: Session = Depends(get_db)):
         "recent_activity": [] # Placeholder for recent logs
     }
 
+from services.fraud_service import FraudDetectionService
+
 @api_router.get("/fraud-detection")
-async def fraud_detection(db: Session = Depends(get_db)):
-    # In a real app, we'd fetch multiple bidders data
-    # For now, return sample response
-    return {
-        "alerts": [
-            {"bidder": "ABC Corp", "risk": "HIGH", "reason": "Shared Director with XYZ Ltd", "score": 85},
-            {"bidder": "PQR Enterprises", "risk": "MEDIUM", "reason": "Similar document structure to MNO Pvt", "score": 55}
-        ]
+async def get_fraud_alerts(db: Session = Depends(get_db)):
+    """
+    Get all detected fraud patterns and suspicious bidder relationships.
+    """
+    return FraudDetectionService.detect_fraud_patterns(db)
+
+@api_router.get("/fraud-detection/summary")
+async def get_fraud_summary(db: Session = Depends(get_db)):
+    """
+    Get a summary of fraud statistics for the dashboard cards.
+    """
+    alerts = FraudDetectionService.detect_fraud_patterns(db)
+    
+    summary = {
+        "total_alerts": len(alerts),
+        "high_risk": len([a for a in alerts if a["risk_level"] == "High"]),
+        "medium_risk": len([a for a in alerts if a["risk_level"] == "Medium"]),
+        "low_risk": len([a for a in alerts if a["risk_level"] == "Low"]),
     }
+    return summary
 
 @api_router.get("/audit-logs")
 async def get_audit_logs(db: Session = Depends(get_db)):
