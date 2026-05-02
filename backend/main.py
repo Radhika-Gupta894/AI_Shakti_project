@@ -18,6 +18,7 @@ load_dotenv(dotenv_path=env_path)
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
@@ -146,6 +147,11 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": str(exc)
         }
     )
+
+# Ensure upload directory exists
+os.makedirs("uploads", exist_ok=True)
+
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ==================================================
 # INCLUDE ROUTES

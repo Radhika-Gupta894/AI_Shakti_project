@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
 import { Upload, File, CheckCircle2, Loader2, Search, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -106,8 +107,8 @@ const TenderUpload = () => {
                   />
                 </div>
                 <div className="mt-6 space-y-2 text-sm text-slate-500">
-                  <p className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> OCR Text Extraction</p>
-                  <p className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div> Processing with SHAKTI AI...</p>
+                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> OCR Text Extraction</div>
+                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div> Processing with SHAKTI AI...</div>
                 </div>
               </motion.div>
             )}

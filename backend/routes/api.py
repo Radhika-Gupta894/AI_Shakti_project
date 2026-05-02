@@ -356,3 +356,135 @@ async def get_fraud_summary(db: Session = Depends(get_db)):
 async def get_audit_logs(db: Session = Depends(get_db)):
     logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(100).all()
     return logs
+@api_router.get("/manual-review/{document_id}")
+async def get_manual_review(document_id: int, db: Session = Depends(get_db)):
+    doc = db.query(BidderDocument).filter(BidderDocument.id == document_id).first()
+    if not doc:
+        # For demo purposes, create a dummy document if not found
+        doc = BidderDocument(
+            id=document_id,
+            bidder_id=1,
+            document_type="GST Registration",
+            file_path="uploads/demo_gst.pdf",
+            extracted_data={
+                "gstin": "27AAACR1234A1Z1",
+                "legal_name": "SHAKTI ENTERPRISE PVT LTD",
+                "registration_date": "12-05-2018",
+                "type": "Regular"
+            }
+        )
+    
+    bidder = db.query(Bidder).filter(Bidder.id == doc.bidder_id).first()
+    
+    # Get history
+    history = db.query(ManualReview).filter(ManualReview.document_id == document_id).order_by(ManualReview.timestamp.desc()).all()
+    
+    return {
+        "document": {
+            "id": doc.id,
+            "type": doc.document_type,
+            "file_path": doc.file_path,
+            "extracted_data": doc.extracted_data,
+            "uploaded_by": bidder.company_name if bidder else "Unknown",
+            "uploaded_at": doc.created_at.strftime("%Y-%m-%d %H:%M") if doc.created_at else "2026-05-01 10:20"
+        },
+        "history": [
+            {
+                "reviewer": h.reviewer_name,
+                "action": h.action,
+                "comments": h.comments,
+                "timestamp": h.timestamp.strftime("%Y-%m-%d %H:%M")
+            } for h in history
+        ]
+    }
+
+@api_router.post("/manual-review/approve")
+async def approve_document(data: dict, db: Session = Depends(get_db)):
+    document_id = data.get("document_id")
+    reviewer = data.get("reviewer", "Officer Admin")
+    comments = data.get("comments", "")
+    
+    review = ManualReview(
+        document_id=document_id,
+        reviewer_name=reviewer,
+        action="APPROVE",
+        comments=comments,
+        status="APPROVED"
+    )
+    db.add(review)
+    
+    # Update Audit Log
+    audit = AuditLog(
+        action=f"Document Approved: ID {document_id}",
+        details=f"Reviewer: {reviewer}, Comments: {comments}",
+        user_id=1 # Demo user
+    )
+    db.add(audit)
+    db.commit()
+    return {"message": "Document approved successfully"}
+
+@api_router.post("/manual-review/reject")
+async def reject_document(data: dict, db: Session = Depends(get_db)):
+    document_id = data.get("document_id")
+    reviewer = data.get("reviewer", "Officer Admin")
+    comments = data.get("comments", "")
+    
+    review = ManualReview(
+        document_id=document_id,
+        reviewer_name=reviewer,
+        action="REJECT",
+        comments=comments,
+        status="REJECTED"
+    )
+    db.add(review)
+    
+    audit = AuditLog(
+        action=f"Document Rejected: ID {document_id}",
+        details=f"Reviewer: {reviewer}, Reason: {comments}",
+        user_id=1
+    )
+    db.add(audit)
+    db.commit()
+    return {"message": "Document rejected"}
+
+@api_router.post("/manual-review/clarification")
+async def request_clarification(data: dict, db: Session = Depends(get_db)):
+    document_id = data.get("document_id")
+    bidder_id = data.get("bidder_id")
+    message = data.get("message")
+    reviewer = data.get("reviewer", "Officer Admin")
+    
+    req = ClarificationRequest(
+        bidder_id=bidder_id,
+        document_id=document_id,
+        message=message
+    )
+    db.add(req)
+    
+    review = ManualReview(
+        document_id=document_id,
+        reviewer_name=reviewer,
+        action="CLARIFY",
+        comments=f"Requested Clarification: {message}",
+        status="CLARIFICATION_REQUESTED"
+    )
+    db.add(review)
+    db.commit()
+    return {"message": "Clarification request sent to bidder"}
+
+@api_router.post("/manual-review/save")
+async def save_review(data: dict, db: Session = Depends(get_db)):
+    document_id = data.get("document_id")
+    reviewer = data.get("reviewer", "Officer Admin")
+    comments = data.get("comments", "")
+    
+    review = ManualReview(
+        document_id=document_id,
+        reviewer_name=reviewer,
+        action="SAVE",
+        comments=comments,
+        status="DRAFT"
+    )
+    db.add(review)
+    db.commit()
+    return {"message": "Review draft saved"}
