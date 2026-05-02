@@ -5,9 +5,14 @@ from models import Tender, Bidder, BidderDocument, Evaluation, AuditLog, User
 # Note: BidderDocument might need to be moved to its own file or added to models/__init__.py
 from services.evaluator import process_tender_upload, process_bidder_evaluation
 from services.ai_service import AIService
+import logging
 import shutil
 import os
 import uuid
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 api_router = APIRouter()
 ai_service = AIService()
@@ -237,55 +242,74 @@ async def finalize_submission(tender_id: int, bidder_id: int, db: Session = Depe
     and creates an initial evaluation entry for the Admin.
     Self-heals by creating stubs if records are missing (for demo).
     """
-    tender = db.query(Tender).filter(Tender.id == tender_id).first()
-    if not tender:
-        tender = Tender(id=tender_id, title=f"Tender #{tender_id}", status="active", criteria={})
-        db.add(tender)
-        db.commit()
-        db.refresh(tender)
-        
-    bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
-    if not bidder:
-        bidder = Bidder(id=bidder_id, company_name=f"Demo Bidder {bidder_id}", gst_number="DEMO123456")
-        db.add(bidder)
-        db.commit()
-        db.refresh(bidder)
-
-    # Check for existing evaluation or create new one
-    eval_record = db.query(Evaluation).filter(
-        Evaluation.tender_id == tender_id, 
-        Evaluation.bidder_id == bidder_id
-    ).first()
+    logger.info(f"📥 Received finalize-submission for tender {tender_id}, bidder {bidder_id}")
     
-    if not eval_record:
-        eval_record = Evaluation(
-            tender_id=tender_id,
-            bidder_id=bidder_id,
-            status="SUBMITTED",
-            confidence_score=0,
-            risk_level="PENDING"
+    try:
+        tender = db.query(Tender).filter(Tender.id == tender_id).first()
+        if not tender:
+            logger.info(f"🏗️ Creating stub tender {tender_id}")
+            tender = Tender(id=tender_id, title=f"Tender #{tender_id}", status="active", criteria={})
+            db.add(tender)
+            db.commit()
+            db.refresh(tender)
+            
+        bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
+        if not bidder:
+            logger.info(f"👤 Creating stub bidder {bidder_id}")
+            bidder = Bidder(id=bidder_id, company_name=f"Demo Bidder {bidder_id}", gst_number="DEMO123456")
+            db.add(bidder)
+            db.commit()
+            db.refresh(bidder)
+
+        # Check for existing evaluation or create new one
+        eval_record = db.query(Evaluation).filter(
+            Evaluation.tender_id == tender_id, 
+            Evaluation.bidder_id == bidder_id
+        ).first()
+        
+        if not eval_record:
+            logger.info(f"📝 Creating evaluation record")
+            eval_record = Evaluation(
+                tender_id=tender_id,
+                bidder_id=bidder_id,
+                status="SUBMITTED",
+                confidence_score=0,
+                risk_level="PENDING"
+            )
+            db.add(eval_record)
+            db.commit()
+            db.refresh(eval_record)
+            
+        # Ensure a user exists for the audit log (foreign key constraint)
+        user = db.query(User).filter(User.id == bidder_id).first()
+        if not user:
+            logger.info(f"🔑 Creating demo user {bidder_id}")
+            user = User(
+                id=bidder_id, 
+                username=f"user_{bidder_id}", 
+                name=f"Demo User {bidder_id}",
+                email=f"user{bidder_id}@example.com", 
+                password="hashed_demo_password", # Dummy for demo
+                role="bidder"
+            )
+            db.add(user)
+            db.commit()
+
+        # Log the action
+        logger.info(f"📋 Logging audit trail")
+        audit = AuditLog(
+            action=f"Bid Submitted by {bidder.company_name}",
+            details=f"Tender: {tender.title}",
+            user_id=bidder_id # For demo
         )
-        db.add(eval_record)
+        db.add(audit)
         db.commit()
-        db.refresh(eval_record)
         
-    # Ensure a user exists for the audit log (foreign key constraint)
-    user = db.query(User).filter(User.id == bidder_id).first()
-    if not user:
-        user = User(id=bidder_id, username=f"user_{bidder_id}", email=f"user{bidder_id}@example.com", role="bidder")
-        db.add(user)
-        db.commit()
-
-    # Log the action
-    audit = AuditLog(
-        action=f"Bid Submitted by {bidder.company_name}",
-        details=f"Tender: {tender.title}",
-        user_id=bidder_id # For demo
-    )
-    db.add(audit)
-    db.commit()
-    
-    return {"message": "Submission finalized", "id": eval_record.id}
+        logger.info(f"✅ Submission finalized for bidder {bidder_id}")
+        return {"message": "Submission finalized", "id": eval_record.id}
+    except Exception as e:
+        logger.error(f"❌ Error in finalize_submission: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/dashboard-stats")
 async def get_stats(db: Session = Depends(get_db)):
