@@ -19,21 +19,21 @@ const StatusBadge = ({ status }) => {
 };
 
 const BidderEvaluation = () => {
-  const { request: fetchStats, loading, error, data: stats } = useApi(apiService.getDashboardStats);
+  const { request: fetchEvaluations, loading, error, data: evaluations } = useApi(apiService.getEvaluations);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    fetchEvaluations();
+  }, [fetchEvaluations]);
 
-  const bidders = stats?.recent_bidders || [
+  const bidders = evaluations || [
     { id: 1, name: "Bharat Electronics Ltd", status: "PASS", score: 98, risk: "LOW", date: "2026-04-28" },
     { id: 2, name: "Modern Garments Pvt", status: "FAIL", score: 45, risk: "HIGH", date: "2026-04-29" },
     { id: 3, name: "Dynamic Solutions", status: "REVIEW", score: 72, risk: "MEDIUM", date: "2026-04-30" },
   ];
 
   const filteredBidders = bidders.filter(b => 
-    b.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (b.name || b.bidder_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -104,9 +104,9 @@ const BidderEvaluation = () => {
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg gradient-blue/10 text-blue-600 flex items-center justify-center font-bold text-xs">
-                      {bidder.name.charAt(0)}
+                      {(bidder.name || bidder.bidder_name || "B").charAt(0)}
                     </div>
-                    <span className="font-semibold text-slate-800 text-sm">{bidder.name}</span>
+                    <span className="font-semibold text-slate-800 text-sm">{bidder.name || bidder.bidder_name}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -116,19 +116,19 @@ const BidderEvaluation = () => {
                   <div className="flex items-center gap-2">
                     <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div 
-                        className={`h-full ${bidder.score > 80 ? 'bg-green-500' : bidder.score > 50 ? 'bg-amber-500' : 'bg-red-500'}`} 
-                        style={{width: `${bidder.score}%`}}
+                        className={`h-full ${(bidder.score || bidder.ai_score) > 80 ? 'bg-green-500' : (bidder.score || bidder.ai_score) > 50 ? 'bg-amber-500' : 'bg-red-500'}`} 
+                        style={{width: `${bidder.score || bidder.ai_score}%`}}
                       ></div>
                     </div>
-                    <span className="text-xs font-bold text-slate-700">{bidder.score}%</span>
+                    <span className="text-xs font-bold text-slate-700">{bidder.score || bidder.ai_score}%</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`text-xs font-medium ${bidder.risk === 'HIGH' ? 'text-red-600' : bidder.risk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600'}`}>
-                    ● {bidder.risk}
+                  <span className={`text-xs font-medium ${bidder.risk === 'HIGH' || bidder.risk_level === 'HIGH' ? 'text-red-600' : bidder.risk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600'}`}>
+                    ● {bidder.risk || bidder.risk_level}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-500">{bidder.date}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{bidder.date || bidder.submission_date}</td>
                 <td className="px-6 py-4 text-right">
                   <Link 
                     to={`/admin/explain/${bidder.id}`}
