@@ -60,6 +60,14 @@ export const apiService = {
     });
   },
 
+  finalizeSubmission: (tenderId, bidderId) => {
+    return api.post('/finalize-submission', null, {
+      params: { tender_id: tenderId, bidder_id: bidderId },
+    });
+  },
+
+  getMySubmissions: (bidderId) => api.get(`/my-submissions/${bidderId}`),
+
   getEvaluationReport: (id) => api.get(`/evaluation-report/${id}`),
 
   getDashboardStats: () => api.get('/dashboard-stats'),
