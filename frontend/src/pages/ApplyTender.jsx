@@ -3,7 +3,7 @@ import BidderLayout from '../layouts/BidderLayout';
 import { FileUp, CheckCircle, AlertCircle, Trash2, Info, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 const DocumentUpload = ({ label, type, bidderId, tenderId, docType, onUploadSuccess }) => {
   const [file, setFile] = useState(null);
@@ -87,6 +87,9 @@ const ApplyTender = () => {
   const { id } = useParams();
   const [tender, setTender] = useState(null);
   const [uploadedDocs, setUploadedDocs] = useState([]);
+  const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Fetch tender details if needed, or just use the ID
@@ -106,9 +109,27 @@ const ApplyTender = () => {
     setUploadedDocs(prev => [...prev, type]);
   };
 
+  const handleFinalSubmission = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      // For demo, we use bidderId = 1
+      await apiService.finalizeSubmission(id, 1);
+      // Success! Redirect to status page
+      setTimeout(() => {
+        navigate('/bidder/status');
+      }, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || "Submission failed. Please try again.");
+      setSubmitting(false);
+    }
+  };
+
+  const isFormComplete = uploadedDocs.length >= 3;
+
   return (
     <BidderLayout>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto pb-20">
         <div className="mb-8 flex justify-between items-end">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Apply to Tender</h2>
@@ -120,7 +141,7 @@ const ApplyTender = () => {
           </div>
         </div>
 
-        <div className="bg-blue-600 rounded-2xl p-8 text-white mb-8 relative overflow-hidden shadow-xl shadow-blue-200">
+        <div className="bg-blue-600 rounded-3xl p-8 text-white mb-8 relative overflow-hidden shadow-xl shadow-blue-200">
            <div className="relative z-1">
              <div className="flex items-center gap-3 mb-4">
                <Info size={24} />
@@ -160,16 +181,35 @@ const ApplyTender = () => {
           />
         </div>
 
-        <div className="glass-card p-6 border-slate-200 bg-slate-50 flex items-center justify-between">
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-2xl mb-6 text-sm font-bold border border-red-100">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm flex items-center justify-between">
            <div className="flex items-center gap-3 text-slate-600">
               <AlertCircle size={20} className="text-amber-500" />
-              <p className="text-sm">Submit your documents for AI evaluation.</p>
+              <div>
+                <p className="text-sm font-bold text-slate-800">Final Verification</p>
+                <p className="text-xs text-slate-500">Submit your documents for AI evaluation.</p>
+              </div>
            </div>
            <button 
-             disabled={uploadedDocs.length < 3}
-             className="btn-primary disabled:opacity-50"
+             onClick={handleFinalSubmission}
+             disabled={submitting}
+             className={`px-8 py-4 rounded-2xl font-black text-sm transition-all flex items-center gap-3 ${
+               submitting
+               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+               : 'bg-blue-600 text-white shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-95'
+             }`}
            >
-             Final Submission
+             {submitting ? (
+               <>
+                 <Loader2 size={18} className="animate-spin" />
+                 Processing Bid...
+               </>
+             ) : 'Final Submission'}
            </button>
         </div>
       </div>
