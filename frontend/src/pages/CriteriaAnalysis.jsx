@@ -15,9 +15,10 @@ import {
   Layers,
   ChevronDown,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, API_BASE_URL } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
 // --- Components ---
@@ -58,14 +59,29 @@ const CategoryBadge = ({ category }) => {
 
 // --- Main Page ---
 
+import { useNavigate } from 'react-router-dom';
+
 const CriteriaAnalysis = () => {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
   const [selectedItem, setSelectedItem] = useState(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const { request: fetchTender, loading, data: tender } = useApi(apiService.getLatestTender);
 
   useEffect(() => {
-    fetchTender();
+    fetchTender().catch(err => console.log("No tender found yet"));
   }, [fetchTender]);
+
+  const handleFinalize = async () => {
+    setIsFinalizing(true);
+    // Simulate a final save/verification step
+    setTimeout(() => {
+      setIsFinalizing(false);
+      setShowSuccess(true);
+      setTimeout(() => navigate('/admin/dashboard'), 2000);
+    }, 1500);
+  };
 
   const criteriaData = tender?.criteria || {
     financial: [],
@@ -74,9 +90,9 @@ const CriteriaAnalysis = () => {
   };
 
   const flattenedCriteria = [
-    ...(criteriaData.financial || []).map(c => ({ ...c, category: 'Financial' })),
-    ...(criteriaData.technical || []).map(c => ({ ...c, category: 'Technical' })),
-    ...(criteriaData.compliance || []).map(c => ({ ...c, category: 'Compliance' })),
+    ...(criteriaData.financial || criteriaData.financial_criteria || []).map(c => ({ ...c, category: 'Financial', requirement: c.name || c.description })),
+    ...(criteriaData.technical || criteriaData.technical_criteria || []).map(c => ({ ...c, category: 'Technical', requirement: c.name || c.description })),
+    ...(criteriaData.compliance || criteriaData.compliance_criteria || []).map(c => ({ ...c, category: 'Compliance', requirement: c.name || c.description })),
   ];
 
   const filteredCriteria = filter === 'All' 
@@ -93,10 +109,45 @@ const CriteriaAnalysis = () => {
       : 0
   };
 
+  if (!loading && !tender) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+          <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-6">
+            <AlertCircle size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">No Tender Data Found</h2>
+          <p className="text-slate-500 mb-8 max-w-sm">Please upload a tender document first to view the AI criteria analysis.</p>
+          <button onClick={() => navigate('/admin/upload')} className="btn-primary">Go to Upload</button>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout>
       <div className="max-w-[1600px] mx-auto">
         
+        {/* Success Overlay */}
+        <AnimatePresence>
+          {showSuccess && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-white/80 backdrop-blur-md"
+            >
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center text-green-600 mb-6">
+                  <CheckCircle2 size={40} />
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Analysis Confirmed</h2>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-2">Redirecting to Dashboard...</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
           <div>
@@ -118,8 +169,12 @@ const CriteriaAnalysis = () => {
               <ExternalLink size={18} />
               Export Report
             </button>
-            <button className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-500 transition-all shadow-lg shadow-blue-200 flex items-center gap-2">
-              Confirm & Finalize
+            <button 
+              onClick={handleFinalize}
+              disabled={isFinalizing}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-500 transition-all shadow-lg shadow-blue-200 flex items-center gap-2 disabled:opacity-50"
+            >
+              {isFinalizing ? <Loader2 className="animate-spin" size={18} /> : 'Confirm & Finalize'}
               <ArrowRight size={18} />
             </button>
           </div>
@@ -152,24 +207,21 @@ const CriteriaAnalysis = () => {
                 </div>
               </div>
             </div>
-            <div className="flex-1 bg-slate-100/50 p-8 overflow-y-auto relative">
-              {/* PDF Content Placeholder */}
-              <div className="max-w-md mx-auto space-y-4">
-                {[...Array(12)].map((_, i) => (
-                  <div key={i} className={`h-4 bg-white rounded-md w-full relative ${i === 4 || i === 8 ? 'ring-2 ring-blue-400 ring-offset-4' : ''}`}>
-                    {(i === 4 || i === 8) && (
-                      <span className="absolute -left-10 top-0 bg-blue-600 text-white text-[8px] font-bold px-1 py-0.5 rounded uppercase">Clause</span>
-                    )}
+            <div className="flex-1 bg-slate-100/50 overflow-hidden relative">
+              {tender?.file_path ? (
+                <iframe 
+                  src={`${API_BASE_URL}/uploads/${tender.file_path.split('/').pop()}`}
+                  className="w-full h-full border-none"
+                  title="Tender Document"
+                />
+              ) : (
+                <div className="max-w-md mx-auto space-y-4 p-8">
+                  <div className="text-center py-20">
+                    <FileText size={48} className="mx-auto text-slate-300 mb-4" />
+                    <p className="text-slate-500 font-medium">No document preview available</p>
                   </div>
-                ))}
-                <div className="p-6 bg-white rounded-2xl shadow-sm border border-slate-200 mt-10">
-                  <h4 className="font-bold text-slate-800 mb-2">Section 4.2: Financial Eligibility</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    The bidder must have an average annual turnover of at least ₹5 Crores during the last three financial years. 
-                    Audited balance sheets must be submitted as proof of compliance...
-                  </p>
                 </div>
-              </div>
+              )}
             </div>
           </motion.div>
 
