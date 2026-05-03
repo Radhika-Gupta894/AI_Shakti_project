@@ -70,9 +70,9 @@ const BidderRow = ({ name, score, status, confidence, issues, date }) => (
     <td className="py-4 pl-6">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs uppercase">
-          {name.substring(0, 2)}
+          {name ? name.substring(0, 2) : '??'}
         </div>
-        <span className="text-sm font-bold text-slate-800">{name}</span>
+        <span className="text-sm font-bold text-slate-800">{name || 'Unknown Bidder'}</span>
       </div>
     </td>
     <td className="py-4">
@@ -118,15 +118,17 @@ const Dashboard = () => {
   const { request: fetchLogs, data: auditLogs } = useApi(apiService.getAuditLogs);
 
   useEffect(() => {
-    fetchStats();
-    fetchEvaluations();
-    fetchLogs();
+    const fetchData = async () => {
+      try {
+        await Promise.allSettled([fetchStats(), fetchEvaluations(), fetchLogs()]);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+      }
+    };
 
-    const interval = setInterval(() => {
-      fetchStats();
-      fetchEvaluations();
-      fetchLogs();
-    }, 5000);
+    fetchData();
+
+    const interval = setInterval(fetchData, 10000); // 10 seconds is enough
 
     return () => clearInterval(interval);
   }, [fetchStats, fetchEvaluations, fetchLogs]);
@@ -320,10 +322,12 @@ const Dashboard = () => {
                   <div key={i} className="flex gap-4 border-l-2 border-blue-500/30 pl-4 py-1">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                       </span>
-                      <span className="text-sm font-bold text-slate-300">{log.action}</span>
-                      <span className="text-[10px] text-slate-500 font-medium">{log.details}</span>
+                      <span className="text-sm font-bold text-slate-300">{log.action || 'System Action'}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details || 'No details available'}
+                      </span>
                     </div>
                   </div>
                 ))

@@ -104,8 +104,17 @@ const Header = ({ toggle }) => {
   const location = useLocation();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('adminUser');
-    if (storedUser) setUser(JSON.parse(storedUser));
+    try {
+      const storedUser = localStorage.getItem('adminUser');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed && typeof parsed === 'object') {
+          setUser(prev => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch (err) {
+      console.error("Error parsing user data:", err);
+    }
   }, []);
 
   const getPageTitle = () => {
@@ -153,8 +162,8 @@ const Header = ({ toggle }) => {
           
           <div className="flex items-center gap-3">
             <div className="hidden sm:block text-right">
-              <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">{user.username}</p>
-              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{user.city || 'Officer'}</p>
+              <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">{user?.username || 'Admin'}</p>
+              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{user?.city || 'Officer'}</p>
             </div>
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
               <img 

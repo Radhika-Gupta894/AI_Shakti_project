@@ -131,7 +131,7 @@ async def upload_bidder_doc(
     db.commit()
     db.refresh(new_doc)
     
-    return {"id": new_doc.id, "message": "Document uploaded successfully"}
+    return {"id": new_doc.id, "file_path": file_path, "message": "Document uploaded successfully"}
 
 @api_router.get("/tenders/latest")
 async def get_latest_tender(db: Session = Depends(get_db)):
