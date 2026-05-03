@@ -18,6 +18,7 @@ load_dotenv(dotenv_path=env_path)
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
@@ -104,8 +105,8 @@ app = FastAPI(
 # ==================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"], # Allow all origins
+    allow_credentials=False, # Must be False when allow_origins is ["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -146,6 +147,11 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": str(exc)
         }
     )
+
+# Ensure upload directory exists
+os.makedirs("uploads", exist_ok=True)
+
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ==================================================
 # INCLUDE ROUTES

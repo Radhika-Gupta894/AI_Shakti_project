@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 import logging
+import ssl
 
 # -----------------------------------
 # Logging Configuration
@@ -30,6 +31,11 @@ if not DATABASE_URL:
     logger.error("❌ DATABASE_URL not found in environment variables!")
     raise ValueError("DATABASE_URL environment variable is not set.")
 
+# For pure-python pg8000 driver (no C++ build tools required)
+if DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+pg8000://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
+    logger.info("⚡ Using pure-python pg8000 driver for cloud connection")
+
 # Hide password in logs for security
 safe_db_url = DATABASE_URL.split("@")[-1]
 
@@ -38,25 +44,34 @@ logger.info(f"🔌 Connecting to database: {safe_db_url}")
 # -----------------------------------
 # Create SQLAlchemy Engine
 # -----------------------------------
+# For Cloud DBs (Neon/Supabase), we need SSL and pooling
 engine = create_engine(
     DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
+    pool_recycle=1800,
     pool_pre_ping=True,
     echo=False,
-    connect_args={'connect_timeout': 5} # 5 second timeout
+    connect_args={"ssl_context": ssl.create_default_context()}
+    
 )
 
 def verify_connection():
+    """Verify database connection with retry logic"""
     try:
+        logger.info("📡 Testing cloud database connection...")
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        logger.info("✅ Database connection verified successfully.")
+            conn.commit()
+            logger.info("✅ Cloud Database connection verified!")
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to connect to database: {e}")
+        logger.error(f"❌ Database connection failed: {e}")
         return False
 
-# We skip the blocking check at top-level to let the app start
-# verify_connection()
+# Run a quick check on startup
+verify_connection()
 
 # -----------------------------------
 # Session Factory

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get API base URL from environment variable or default to localhost
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -60,6 +60,14 @@ export const apiService = {
     });
   },
 
+  finalizeSubmission: (tenderId, bidderId) => {
+    return api.post('/finalize-submission', null, {
+      params: { tender_id: tenderId, bidder_id: bidderId },
+    });
+  },
+
+  getMySubmissions: (bidderId) => api.get(`/my-submissions/${bidderId}`),
+
   getEvaluationReport: (id) => api.get(`/evaluation-report/${id}`),
 
   getDashboardStats: () => api.get('/dashboard-stats'),
@@ -69,6 +77,13 @@ export const apiService = {
   getFraudDetection: () => api.get('/fraud-detection'),
 
   getAuditLogs: () => api.get('/audit-logs'),
+
+  // Manual Review
+  getManualReview: (docId) => api.get(`/manual-review/${docId}`),
+  approveDocument: (data) => api.post('/manual-review/approve', data),
+  rejectDocument: (data) => api.post('/manual-review/reject', data),
+  requestClarification: (data) => api.post('/manual-review/clarification', data),
+  saveReview: (data) => api.post('/manual-review/save', data),
 };
 
 export default api;
