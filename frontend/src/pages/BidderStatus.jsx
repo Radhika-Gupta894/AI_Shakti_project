@@ -420,13 +420,6 @@ const BidderStatus = () => {
             <h2 className="text-4xl font-black text-slate-900 tracking-tight">Bidder <span className="text-blue-600">Workspace</span></h2>
             <p className="text-slate-500 font-medium mt-1">Manage tenders, submit documents, and track AI evaluations securely.</p>
           </div>
-          <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
-            <button onClick={() => navigate('/bidder/dashboard')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Dashboard</button>
-            <button onClick={() => navigate('/bidder/applications')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'track' || activeTab === 'documents' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>My Applications</button>
-            <button onClick={() => navigate('/bidder/messages')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'clarification' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              Clarifications {isRejected && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"/>}
-            </button>
-          </div>
         </div>
 
         {/* Dynamic Content */}
