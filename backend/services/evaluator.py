@@ -2,7 +2,7 @@ from services.ai_service import AIService
 from utils.ocr import extract_pdf_text, extract_image_text
 import os
 
-ai_service = AIService()
+# AIService is now instantiated locally within functions to avoid blocking imports
 
 async def process_tender_upload(file_path: str):
     """
@@ -15,7 +15,7 @@ async def process_tender_upload(file_path: str):
         text = extract_image_text(file_path)
     
     # 2. AI Extraction
-    criteria = await ai_service.extract_tender_criteria(text)
+    criteria = await AIService().extract_tender_criteria(text)
     
     return {
         "text": text,
@@ -42,7 +42,7 @@ async def process_bidder_evaluation(tender_criteria: dict, bidder_docs: list):
         aggregated_text += text
     
     # 2. AI Evaluate
-    evaluation_result = await ai_service.evaluate_bidder_docs(tender_criteria, aggregated_text)
+    evaluation_result = await AIService().evaluate_bidder_docs(tender_criteria, aggregated_text)
     
     # 3. Apply post-AI rules (Confidence scoring)
     # If AI confidence is low, force status to REVIEW

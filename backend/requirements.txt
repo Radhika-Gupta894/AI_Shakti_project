@@ -12,3 +12,4 @@ openai
 opencv-python-headless
 numpy
 jinja2
+pg8000

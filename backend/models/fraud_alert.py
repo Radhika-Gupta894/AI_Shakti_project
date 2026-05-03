@@ -6,11 +6,17 @@ class FraudAlert(Base):
     __tablename__ = "fraud_alerts"
 
     id = Column(Integer, primary_key=True, index=True)
-    bidder_id = Column(Integer, ForeignKey("bidders.id"))
-    tender_id = Column(Integer, ForeignKey("tenders.id"))
-    alert_type = Column(String)
-    risk_level = Column(String) # low, medium, high
+    bidder1_id = Column(Integer, ForeignKey("bidders.id"), nullable=True)
+    bidder2_id = Column(Integer, ForeignKey("bidders.id"), nullable=True)
+    tender_id = Column(Integer, ForeignKey("tenders.id"), nullable=True)
+    
+    alert_type = Column(String) # COLLUSION, SHELL_COMPANY, DUPLICATE_DOCS
+    risk_level = Column(String) # Low, Medium, High
     risk_score = Column(Float)
+    
     alert_reason = Column(Text)
     details = Column(JSON)
+    
+    status = Column(String, default="NEW") # NEW, FLAGGED, RESOLVED, DISMISSED
+    
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)

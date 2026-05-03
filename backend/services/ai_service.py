@@ -2,21 +2,50 @@ import os
 import json
 import google.generativeai as genai
 from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AIService:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(AIService, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        # Configure Gemini inside init to ensure env vars are loaded
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            print("CRITICAL: GEMINI_API_KEY not found in environment variables.")
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # We don't initialize here to prevent blocking imports
+        pass
+
+    def _ensure_initialized(self):
+        if not self._initialized:
+            logger.info("🤖 Initializing AI Service (Lazy)...")
+            self.api_key = os.getenv("GEMINI_API_KEY")
+            if not self.api_key:
+                logger.error("CRITICAL: GEMINI_API_KEY not found!")
+            genai.configure(api_key=self.api_key)
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self._initialized = True
+            logger.info("✅ AI Service Initialized.")
 
     async def extract_tender_criteria(self, text: str) -> Dict[str, Any]:
+        self._ensure_initialized()
         """
         Analyze tender document text to extract technical, financial, and compliance criteria.
         Uses advanced prompting for high-precision extraction.
         """
+        if not text or len(text.strip()) < 10:
+            logger.warning("⚠️ No text provided for criteria extraction. Returning empty structure.")
+            return {
+                "technical_criteria": [],
+                "financial_criteria": [],
+                "compliance_criteria": [],
+                "deadlines": [],
+                "warning": "No text could be extracted from the document. Please check OCR/Tesseract."
+            }
+            
         prompt = f"""
         System: You are an expert procurement analyst for the CRPF (Central Reserve Police Force). 
         Task: Extract specific eligibility criteria from the provided tender document text.
@@ -71,9 +100,26 @@ class AIService:
             }
 
     async def evaluate_bidder_docs(self, criteria: Dict[str, Any], bidder_text: str) -> Dict[str, Any]:
+        self._ensure_initialized()
         """
         Compare bidder documents against tender criteria using advanced reasoning.
         """
+        if not bidder_text or len(bidder_text.strip()) < 10:
+            logger.warning("⚠️ No bidder text provided for evaluation. Returning default review status.")
+            return {
+                "overall_status": "REVIEW",
+                "risk_level": "High",
+                "results": [
+                    {
+                        "criterion_name": "General Eligibility",
+                        "status": "REVIEW",
+                        "reasoning": "No text could be extracted from the uploaded documents. Please check if files are scanned correctly.",
+                        "confidence": 0,
+                        "extracted_value": "N/A"
+                    }
+                ]
+            }
+            
         prompt = f"""
         System: You are an expert CRPF Auditor. Evaluate the bidder's document text against the provided tender criteria.
         
@@ -129,6 +175,7 @@ class AIService:
             }
 
     async def detect_fraud(self, bidders_data: list) -> Dict[str, Any]:
+        self._ensure_initialized()
         """
         Analyze multiple bidders for suspicious patterns and collusion.
         """
@@ -165,3 +212,6 @@ class AIService:
         except Exception as e:
             print(f"Fraud Detection Error: {e}")
             return {"fraud_alerts": [], "overall_collusion_risk": 0}
+
+# Final confirmation that the service module loaded without syntax errors
+logger.info("✅ AI Service module parsed and loaded successfully.")

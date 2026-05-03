@@ -47,7 +47,10 @@ const StatusBadge = ({ status }) => {
 };
 
 const ManualReview = () => {
-  const [docId, setDocId] = useState(1);
+  const [docId, setDocId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return parseInt(params.get('id')) || 1;
+  });
   const [document, setDocument] = useState(null);
   const [history, setHistory] = useState([]);
   const [comment, setComment] = useState('');
@@ -210,7 +213,7 @@ const ManualReview = () => {
               <div className="flex-1 bg-slate-200/50 overflow-hidden relative">
                 {document?.file_path ? (
                   <iframe 
-                    src={`${API_BASE_URL}/uploads/${document.file_path.split('/').pop()}`}
+                    src={`${API_BASE_URL}/uploads/${document.file_path.split(/[/\\]/).pop()}`}
                     className="w-full h-full border-none"
                     title="Review Document"
                     style={{ transform: `scale(${zoom / 100}) rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
@@ -231,6 +234,8 @@ const ManualReview = () => {
                 Official Review Comments
               </h3>
               <textarea 
+                id="review-comment"
+                name="review-comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Enter detailed review observations, findings, or reasons for rejection..."
@@ -317,7 +322,9 @@ const ManualReview = () => {
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{key.replace('_', ' ')}</span>
                       <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full text-[8px] font-black uppercase tracking-widest">High Conf</span>
                     </div>
-                    <div className="text-sm font-black tracking-tight">{val}</div>
+                    <div className="text-sm font-black tracking-tight">
+                      {typeof val === 'object' ? JSON.stringify(val) : val}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -409,6 +416,8 @@ const ManualReview = () => {
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 block">Message to Bidder</label>
                     <textarea 
+                      id="clarification-msg"
+                      name="clarification-msg"
                       value={clarificationMsg}
                       onChange={(e) => setClarificationMsg(e.target.value)}
                       placeholder="Specify exactly what information is missing or needs clarification..."
