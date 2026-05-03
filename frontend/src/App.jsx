@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Admin Pages
+import ErrorBoundary from './components/ErrorBoundary';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import TenderUpload from './pages/TenderUpload';
@@ -21,7 +22,8 @@ import TenderList from './pages/TenderList';
 function App() {
   return (
     <Router>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/bidder/login" element={<LandingPage />} /> {/* Placeholder for Login */}
@@ -45,7 +47,8 @@ function App() {
         <Route path="/bidder/applications" element={<BidderStatus />} />
         <Route path="/bidder/messages" element={<BidderStatus />} />
       </Routes>
-    </Router>
+    </ErrorBoundary>
+  </Router>
   );
 }
 
