@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Home, 
   Briefcase, 
@@ -16,11 +16,13 @@ import {
   ShieldCheck,
   Menu,
   X,
-  CreditCard
+  CreditCard,
+  ArrowLeft
 } from 'lucide-react';
 
 const BidderSidebar = ({ isOpen, toggle }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   
   const menuItems = [
     { name: 'Dashboard', path: '/bidder/dashboard', icon: Home },
@@ -29,6 +31,11 @@ const BidderSidebar = ({ isOpen, toggle }) => {
     { name: 'Verification', path: '/bidder/status', icon: FileCheck },
     { name: 'Clarifications', path: '/bidder/messages', icon: MessageSquare },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem('bidderUser');
+    navigate('/');
+  };
 
   return (
     <div className={`w-72 h-screen bg-white border-r border-slate-200 fixed left-0 top-0 z-50 p-6 flex flex-col transition-all duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
@@ -51,7 +58,7 @@ const BidderSidebar = ({ isOpen, toggle }) => {
         </button>
       </div>
       
-      <nav className="flex-1 space-y-1.5">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto pr-2 custom-scrollbar">
         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-4">Application Hub</div>
         {menuItems.map((item) => {
           const Icon = item.icon;
@@ -78,6 +85,15 @@ const BidderSidebar = ({ isOpen, toggle }) => {
           <Settings size={20} />
           <span>Profile Settings</span>
         </button>
+        
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 w-full rounded-2xl text-red-500 hover:bg-red-50 transition-all font-bold text-sm"
+        >
+          <LogOut size={20} />
+          <span>Logout</span>
+        </button>
+
         <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100 mt-4">
           <div className="flex items-center gap-2 text-blue-600 font-bold text-[10px] uppercase tracking-widest mb-1">
             <ShieldCheck size={12} />
@@ -92,6 +108,7 @@ const BidderSidebar = ({ isOpen, toggle }) => {
 
 const Header = ({ toggle }) => {
   const [user, setUser] = useState({ username: 'Bharat Electronics', city: 'Defense Sector' });
+  const navigate = useNavigate();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('bidderUser');
@@ -100,10 +117,19 @@ const Header = ({ toggle }) => {
 
   return (
     <header className="h-24 bg-white/70 backdrop-blur-md border-b border-slate-100 fixed top-0 right-0 left-0 lg:left-72 z-40 px-6 lg:px-10 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <button onClick={toggle} className="lg:hidden p-2 hover:bg-slate-50 rounded-lg text-slate-600">
-          <Menu size={24} />
-        </button>
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <button onClick={toggle} className="lg:hidden p-2 hover:bg-slate-50 rounded-lg text-slate-600">
+            <Menu size={24} />
+          </button>
+          <button 
+            onClick={() => navigate(-1)} 
+            className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl transition-all shadow-sm active:scale-90 flex items-center justify-center"
+            title="Go Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+        </div>
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
             Bidder Intelligence
