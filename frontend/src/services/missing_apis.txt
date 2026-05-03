@@ -1,0 +1,4 @@
+import { apiService } from '../services/api';
+
+// Adding missing APIs to api.js
+// I'll update api.js to include these endpoints.

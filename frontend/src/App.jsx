@@ -12,6 +12,7 @@ import Explainability from './pages/Explainability';
 import ManualReview from './pages/ManualReview';
 import FraudDetection from './pages/FraudDetection';
 import FinalReport from './pages/FinalReport';
+import AuditLogs from './pages/AuditLogs';
 
 // Bidder Pages
 import ApplyTender from './pages/ApplyTender';
@@ -35,7 +36,7 @@ function App() {
         <Route path="/admin/explain/:id" element={<Explainability />} />
         <Route path="/admin/manual-review" element={<ManualReview />} />
         <Route path="/admin/fraud" element={<FraudDetection />} />
-        <Route path="/admin/audit" element={<ManualReview />} /> {/* Placeholder for Audit */}
+        <Route path="/admin/audit" element={<AuditLogs />} />
         <Route path="/admin/report" element={<FinalReport />} />
 
         {/* Bidder Routes */}

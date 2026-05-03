@@ -5,19 +5,43 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 120 seconds for long AI tasks
+  timeout: 300000, // 300 seconds for heavy AI/OCR tasks
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Response interceptor for global error handling
+// Request interceptor for logging
+api.interceptors.request.use(
+  (config) => {
+    config.metadata = { startTime: new Date() };
+    console.log(`🚀 API Request: ${config.method.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('❌ API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for global error handling and logging
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const duration = new Date() - response.config.metadata?.startTime;
+    console.log(`✅ API Response: ${response.status} from ${response.config.url} (${duration}ms)`);
+    if (duration > 3000) {
+      console.warn(`🐌 SLOW API ALERT: ${response.config.url} took ${duration}ms`);
+    }
+    return response;
+  },
   (error) => {
     const message = error.response?.data?.detail || error.message || 'Something went wrong';
-    console.error('API Error:', message);
-    // You could trigger a global toast here
+    console.error(`❌ API Error [${error.config?.url}]:`, message);
+    
+    if (error.code === 'ECONNABORTED') {
+      console.error('⏱️ API Timeout: The request took too long.');
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -74,9 +98,12 @@ export const apiService = {
 
   getEvaluations: () => api.get('/evaluations'),
 
-  getFraudDetection: () => api.get('/fraud-detection'),
-
+  // Fraud Detection
+  getFraudAlerts: () => api.get('/fraud-detection'),
+  getFraudSummary: () => api.get('/fraud-detection/summary'),
+  runFraudScan: () => api.post('/fraud-detection/scan'),
   getAuditLogs: () => api.get('/audit-logs'),
+  getAdminDocuments: () => api.get('/admin/documents'),
 
   // Manual Review
   getManualReview: (docId) => api.get(`/manual-review/${docId}`),
@@ -84,6 +111,20 @@ export const apiService = {
   rejectDocument: (data) => api.post('/manual-review/reject', data),
   requestClarification: (data) => api.post('/manual-review/clarification', data),
   saveReview: (data) => api.post('/manual-review/save', data),
+
+  approveBidder: (id) => api.post(`/approve-bidder/${id}`),
+  rejectBidder: (id, reason) => api.post(`/reject-bidder/${id}`, { reason }),
+  sendToManualReview: (id, reason) => api.post(`/send-manual-review/${id}`, { reason }),
+
+  askAi: (question) => api.post('/ask-ai', { question }),
+  getSystemStatus: () => api.get('/system-status'),
+  saveAnnotation: (data) => api.post('/save-annotation', data),
+  highlightClause: (data) => api.post('/highlight-clause', data),
+  editCriteria: (data) => api.post('/edit-criteria', data),
+  
+  extractCriteria: (data) => api.post('/extract-criteria', data),
+  addCriteria: (data) => api.post('/add-criteria', data),
+  getTenderSummary: () => api.get('/tender-summary'),
 };
 
 export default api;
