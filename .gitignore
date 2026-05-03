@@ -35,3 +35,7 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Project Specific
+backend/uploads/
+backend/scratch/

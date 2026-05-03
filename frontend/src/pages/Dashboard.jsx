@@ -67,9 +67,9 @@ const BidderRow = React.memo(({ id, name, score, status, confidence, date }) => 
     <td className="py-4 pl-6">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center font-black text-blue-600 text-xs uppercase shadow-sm">
-          {name.substring(0, 2)}
+          {name ? name.substring(0, 2) : '??'}
         </div>
-        <span className="text-sm font-bold text-slate-800">{name}</span>
+        <span className="text-sm font-bold text-slate-800">{name || 'Unknown Bidder'}</span>
       </div>
     </td>
     <td className="py-4">
@@ -147,6 +147,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!isAutoSync) return;
+    refreshAll();
     const interval = setInterval(() => refreshAll(), 30000); // 30s auto-sync
     return () => clearInterval(interval);
   }, [isAutoSync, refreshAll]);
@@ -328,34 +329,66 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Audit Log Feed */}
-        <div className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden flex flex-col h-[500px]">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
-          <h3 className="font-black text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
-            <Clock size={16} className="text-blue-400" /> Live Audit Trail
-          </h3>
-          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4">
-            {auditLogs && auditLogs.length > 0 ? (
-              auditLogs.map((log, i) => (
-                <div key={i} className="flex gap-4 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-colors">
-                  <div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-200">{log.action}</span>
-                    <span className="text-[10px] text-slate-400 font-medium mt-1 font-mono break-all line-clamp-2">
-                      {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
-                    </span>
-                    <span className="text-[10px] font-black text-blue-400 mt-2 uppercase tracking-widest">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </span>
+        {/* Categories & Audit Trail */}
+        <div className="space-y-6">
+          {/* Category Benchmarks from clean-pr-final */}
+          <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
+              <ShieldCheck size={16} className="text-blue-500" /> Category Benchmarks
+            </h3>
+            <div className="space-y-4">
+              {[
+                { label: 'Technical', value: 88, color: 'blue' },
+                { label: 'Financial', value: 72, color: 'emerald' },
+                { label: 'Compliance', value: 95, color: 'purple' },
+                { label: 'Experience', value: 64, color: 'amber' }
+              ].map((cat, i) => (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cat.label}</span>
+                    <span className="text-[10px] font-black text-slate-900">{cat.value}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${cat.value}%` }}
+                      className={`h-full bg-${cat.color}-500 rounded-full`}
+                    />
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full opacity-50">
-                <Database size={32} className="mb-2" />
-                <p className="text-xs font-bold uppercase tracking-widest">Awaiting System Activity</p>
-              </div>
-            )}
+              ))}
+            </div>
+          </div>
+
+          {/* Audit Log Feed from upstream/main */}
+          <div className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden flex flex-col h-[300px]">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
+            <h3 className="font-black text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Clock size={16} className="text-blue-400" /> Live Audit Trail
+            </h3>
+            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4">
+              {auditLogs && auditLogs.length > 0 ? (
+                auditLogs.map((log, i) => (
+                  <div key={i} className="flex gap-4 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-colors">
+                    <div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-slate-200">{log.action}</span>
+                      <span className="text-[10px] text-slate-400 font-medium mt-1 font-mono break-all line-clamp-2">
+                        {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                      </span>
+                      <span className="text-[10px] font-black text-blue-400 mt-2 uppercase tracking-widest">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full opacity-50">
+                  <Database size={32} className="mb-2" />
+                  <p className="text-xs font-bold uppercase tracking-widest">Awaiting System Activity</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
