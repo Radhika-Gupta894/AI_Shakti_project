@@ -17,7 +17,9 @@ import {
   Menu,
   X,
   CreditCard,
-  ArrowLeft
+  ArrowLeft,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 
 const BidderSidebar = ({ isOpen, toggle }) => {
@@ -107,12 +109,49 @@ const BidderSidebar = ({ isOpen, toggle }) => {
 };
 
 const Header = ({ toggle }) => {
-  const [user, setUser] = useState({ username: 'Bharat Electronics', city: 'Defense Sector' });
+  const [user, setUser] = useState({ username: 'Bharat Electronics', city: 'Defense Sector', email: 'contact@bel-india.com' });
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('bidderUser');
     if (storedUser) setUser(JSON.parse(storedUser));
+    
+    // Fetch real tenders to create dynamic notifications
+    const fetchLatestAlerts = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/tenders');
+        const tenders = await response.json();
+        
+        // Transform all tenders into notifications
+        const dynamicNotifications = tenders.map(t => ({
+          id: `tender-${t.id}`,
+          type: 'tender',
+          title: 'New Tender Uploaded',
+          desc: `${t.title} is now available for bidding.`,
+          time: 'Recently',
+          icon: Briefcase,
+          color: 'blue'
+        }));
+
+        // Add some mock ones for diversity (simulating other events)
+        dynamicNotifications.push(
+          { id: 'mock-1', type: 'approval', title: 'Application Approved', desc: 'Your technical bid for "Coastal Security" has passed.', time: '5h ago', icon: CheckCircle2, color: 'emerald' },
+          { id: 'mock-2', type: 'rejection', title: 'Action Required', desc: 'Please resubmit your GST certificate.', time: '1d ago', icon: AlertTriangle, color: 'amber' }
+        );
+
+        setNotifications(dynamicNotifications);
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
+      }
+    };
+
+    fetchLatestAlerts();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchLatestAlerts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -146,15 +185,132 @@ const Header = ({ toggle }) => {
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 relative">
+          {/* Notifications Toggle */}
           <div className="relative">
-            <div className="p-2.5 rounded-xl bg-slate-50 text-slate-400 cursor-pointer">
+            <button 
+              onClick={() => { setShowNotifications(!showNotifications); setShowProfile(false); }}
+              className={`p-2.5 rounded-xl transition-all ${showNotifications ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+            >
               <Bell size={20} />
-            </div>
-            <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full border-2 border-white"></span>
+            </button>
+            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+
+            {/* Notifications Dropdown */}
+            <AnimatePresence>
+              {showNotifications && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-14 right-0 w-80 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-50"
+                >
+                  <div className="p-5 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest">Recent Alerts</h3>
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{notifications.length} Total</span>
+                    </div>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                    {notifications.map((n) => {
+                      const Icon = n.icon || Bell;
+                      return (
+                        <div key={n.id} className="p-4 border-b border-slate-50 hover:bg-blue-50/30 transition-colors cursor-pointer group">
+                          <div className="flex gap-3">
+                            <div className={`w-10 h-10 rounded-xl bg-${n.color}-50 text-${n.color}-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                              <Icon size={18} />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-black text-slate-900 leading-none">{n.title}</p>
+                              <p className="text-[11px] text-slate-500 leading-tight line-clamp-2 font-medium">{n.desc}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{n.time}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <button className="w-full py-4 text-center text-[10px] font-black text-blue-600 uppercase tracking-widest hover:bg-blue-50 transition-colors border-t border-slate-50">
+                    View All Notifications
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-blue-50 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center text-blue-600">
-            <User size={24} />
+
+          {/* Profile Toggle */}
+          <div className="relative">
+            <button 
+              onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); }}
+              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-2xl border-2 transition-all overflow-hidden flex items-center justify-center ${showProfile ? 'border-blue-600 shadow-lg scale-105' : 'border-white bg-blue-50 text-blue-600 shadow-sm hover:border-blue-200'}`}
+            >
+              <User size={24} />
+            </button>
+
+            {/* Profile Dropdown */}
+            <AnimatePresence>
+              {showProfile && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-14 right-0 w-72 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-50"
+                >
+                  <div className="p-6 text-center bg-gradient-to-br from-blue-600 to-indigo-700 text-white relative">
+                    <button 
+                      onClick={() => setShowProfile(false)}
+                      className="absolute top-4 left-4 p-1.5 hover:bg-white/20 rounded-lg text-white transition-colors z-10"
+                    >
+                      <X size={16} />
+                    </button>
+                    <div className="absolute top-4 right-4 text-white/20"><ShieldCheck size={40} /></div>
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl mx-auto mb-4 flex items-center justify-center border border-white/30">
+                      <User size={32} className="text-white" />
+                    </div>
+                    <h3 className="font-black text-lg leading-tight mb-1">{user.username}</h3>
+                    <p className="text-[10px] font-bold text-blue-100 uppercase tracking-[0.2em]">Verified Organization</p>
+                  </div>
+                  
+                  <div className="p-4 space-y-1">
+                    <div className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer group">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
+                        <MessageSquare size={16} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Email Support</p>
+                        <p className="text-xs font-bold text-slate-700">{user.email || 'contact@bel.gov.in'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer group">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
+                        <Home size={16} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">HQ Location</p>
+                        <p className="text-xs font-bold text-slate-700">{user.city || 'Bengaluru, India'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2 border-t border-slate-50 bg-slate-50/50">
+                    <button 
+                      onClick={() => navigate('/bidder/profile')}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white text-slate-600 text-[11px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-600 hover:text-white transition-all group"
+                    >
+                      <Settings size={14} className="group-hover:rotate-90 transition-transform" />
+                      Manage Account
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
