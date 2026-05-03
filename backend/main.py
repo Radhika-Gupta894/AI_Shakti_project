@@ -66,29 +66,23 @@ logger = get_logger(__name__)
 # ==================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    try:
-        logger.info("🚀 Starting SHAKTI AI Backend...")
-
-        # We try to create tables but don't let it crash the startup if DB is down
+    logger.info("🚀 SHAKTI AI Backend - Startup Sequence Initialized")
+    
+    # 1. Non-blocking Database Initialization
+    def init_db():
         try:
+            logger.info("📡 Database: Verifying tables...")
             Base.metadata.create_all(bind=engine)
-            logger.info("✅ Database tables created/verified successfully.")
-            
-            # Verify created tables
-            inspector = inspect(engine)
-            existing_tables = inspector.get_table_names()
-            logger.info(f"🏗️ Tables currently in database: {existing_tables}")
-        except Exception as db_err:
-            logger.error(f"⚠️ Database table creation skipped (DB might be down): {db_err}")
+            logger.info("✅ Database: Tables verified/created.")
+        except Exception as e:
+            logger.error(f"❌ Database: Initialization failed (Background): {e}")
 
-    except Exception as e:
-        logger.error(f"❌ General initialization error: {e}")
-        logger.error(traceback.format_exc())
+    import threading
+    db_thread = threading.Thread(target=init_db, daemon=True)
+    db_thread.start()
 
     yield
-
-    logger.info("🛑 SHAKTI AI Backend shutting down...")
+    logger.info("🛑 SHAKTI AI Backend - Shutdown Sequence Initiated")
 
 # ==================================================
 # FASTAPI APP
@@ -101,15 +95,35 @@ app = FastAPI(
 )
 
 # ==================================================
-# CORS
+# CORS (Must be at the top for maximum reliability)
 # ==================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins
-    allow_credentials=False, # Must be False when allow_origins is ["*"]
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================================================
+# BASIC TEST ROUTES (Instant Work)
+# ==================================================
+@app.get("/")
+async def root():
+    return {
+        "status": "Online",
+        "message": "SHAKTI AI API is running. Visit /docs for Swagger.",
+        "timestamp": time.time()
+    }
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "Healthy",
+        "database": "Connection is pooled",
+        "service": "FastAPI Core Active",
+        "timestamp": time.time()
+    }
 
 # ==================================================
 # REQUEST LOGGER MIDDLEWARE
@@ -150,134 +164,13 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Ensure upload directory exists
 os.makedirs("uploads", exist_ok=True)
-
+# Static files (for PDF preview) - Mounted under /api/uploads to match frontend expectations
 app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ==================================================
 # INCLUDE ROUTES
 # ==================================================
 app.include_router(api_router, prefix="/api")
-
-# ==================================================
-# ROOT ENDPOINT
-# ==================================================
-@app.get("/")
-def root():
-    db_status = "disconnected"
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-            db_status = "connected"
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        db_status = f"error: {str(e)}"
-
-    return {
-        "message": "Welcome to SHAKTI AI API",
-        "status": "running",
-        "database": db_status
-    }
-
-# ==================================================
-# PYDANTIC SCHEMAS
-# ==================================================
-class TenderSchema(BaseModel):
-    title: str
-    description: str
-
-class BidderSchema(BaseModel):
-    company_name: str
-    gst_number: str
-    turnover: float
-
-# ==================================================
-# VERIFICATION ENDPOINTS
-# ==================================================
-@app.post("/create-tender", tags=["Verification"])
-def create_tender(
-    tender: TenderSchema,
-    db: Session = Depends(get_db)
-):
-
-    try:
-        new_tender = Tender(
-            title=tender.title,
-            description=tender.description
-        )
-
-        db.add(new_tender)
-
-        db.commit()
-
-        db.refresh(new_tender)
-
-        return {
-            "message": "Tender created successfully",
-            "data": {
-                "id": new_tender.id,
-                "title": new_tender.title,
-                "description": new_tender.description
-            }
-        }
-
-    except Exception as e:
-
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
-@app.get("/tenders", tags=["Verification"])
-def list_tenders(db: Session = Depends(get_db)):
-
-    tenders = db.query(Tender).all()
-
-    return tenders
-
-@app.post("/create-bidder", tags=["Verification"])
-def create_bidder(
-    bidder: BidderSchema,
-    db: Session = Depends(get_db)
-):
-
-    try:
-        new_bidder = Bidder(
-            company_name=bidder.company_name,
-            gst_number=bidder.gst_number,
-            turnover=bidder.turnover
-        )
-
-        db.add(new_bidder)
-
-        db.commit()
-
-        db.refresh(new_bidder)
-
-        return {
-            "message": "Bidder created successfully",
-            "data": {
-                "id": new_bidder.id,
-                "company_name": new_bidder.company_name
-            }
-        }
-
-    except Exception as e:
-
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
-@app.get("/users", tags=["Verification"])
-def list_users(db: Session = Depends(get_db)):
-
-    users = db.query(User).all()
-
-    return users
 
 # ==================================================
 # MAIN

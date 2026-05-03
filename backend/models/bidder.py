@@ -7,7 +7,7 @@ class Bidder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String, index=True, nullable=False)
-    gst_number = Column(String, index=True, nullable=False) # Removed unique=True to allow detecting duplicates
+    gst_number = Column(String, index=True, nullable=True)
     phone = Column(String, index=True)
     address = Column(String)
     email = Column(String)

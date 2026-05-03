@@ -1,44 +1,60 @@
 import React from 'react';
+import { AlertTriangle, RefreshCcw, LayoutDashboard } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
+    this.setState({ error, errorInfo });
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
-          <div className="bg-white rounded-[32px] p-10 max-w-2xl w-full shadow-2xl border border-red-100">
-            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+        <div className="min-h-screen bg-[#0B1120] text-slate-300 font-sans flex items-center justify-center p-6 relative overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-red-900/20 blur-[120px] pointer-events-none" />
+          
+          <div className="bg-[#1E293B]/80 backdrop-blur-2xl border border-red-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(239,68,68,0.15)] relative z-10 text-center">
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20 shadow-[inset_0_0_20px_rgba(239,68,68,0.2)]">
+              <AlertTriangle className="text-red-500 w-10 h-10" />
             </div>
-            <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Intelligence Portal Halted</h1>
-            <p className="text-slate-500 mb-8 font-medium leading-relaxed">
-              An unexpected rendering error occurred. This is often caused by missing data from the backend or a malformed API response.
+            
+            <h1 className="text-2xl font-bold text-white mb-2">System Evaluation Failure</h1>
+            <p className="text-sm text-slate-400 mb-6">
+              The AI Decision Dashboard encountered a critical rendering error. The analytics engine could not safely parse the provided data payload.
             </p>
-            <div className="bg-slate-900 rounded-2xl p-6 mb-8 overflow-auto">
-              <code className="text-red-400 text-sm font-mono break-all">
-                {this.state.error?.toString()}
-              </code>
+            
+            <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-left mb-8 overflow-auto max-h-32">
+              <p className="text-xs text-red-400 font-mono break-all">
+                {this.state.error && this.state.error.toString()}
+              </p>
             </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-slate-800 transition-all w-full"
-            >
-              Restart Engine
-            </button>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button 
+                onClick={() => window.location.reload()} 
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+              >
+                <RefreshCcw size={16} />
+                Reload Engine
+              </button>
+              <Link 
+                to="/admin/dashboard"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white text-sm font-bold rounded-xl border border-white/10 transition-all"
+              >
+                <LayoutDashboard size={16} />
+                Return to Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       );

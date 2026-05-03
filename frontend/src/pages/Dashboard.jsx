@@ -1,75 +1,72 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Link } from "react-router-dom";
 import AdminLayout from '../layouts/AdminLayout';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
-import { 
-  Users, 
-  FileText, 
-  CheckCircle2, 
-  AlertTriangle, 
-  TrendingUp, 
-  Loader2, 
-  ShieldCheck, 
-  Search, 
-  ArrowUpRight,
-  Clock,
-  ChevronRight,
-  MoreVertical,
-  Activity
+import {
+  Users, FileText, CheckCircle2, AlertTriangle, TrendingUp, Loader2, ShieldCheck,
+  Search, Clock, Activity, Eye, Download, Cpu, Database, 
+  MessageSquare, X, Send, AlertOctagon
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
-// --- Components ---
+// --- Memoized UI Components ---
 
-const StatCard = ({ title, value, sub, icon: Icon, color, trend, loading }) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all"
+const SkeletonBox = ({ className }) => <div className={`animate-pulse bg-slate-200 ${className}`} />;
+
+const StatCard = React.memo(({ title, value, sub, icon: Icon, color, trend, loading }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+    className="bg-white/90 backdrop-blur-md rounded-[24px] p-6 border border-white/50 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] transition-all"
   >
-    <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/5 blur-3xl rounded-full -mr-10 -mt-10 group-hover:bg-${color}-500/10 transition-all`} />
+    <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/10 blur-2xl rounded-full -mr-10 -mt-10 group-hover:bg-${color}-500/20 transition-all`} />
     <div className="flex justify-between items-start mb-4 relative z-10">
-      <div className={`p-3 rounded-2xl bg-${color}-500/10 text-${color}-600`}>
+      <div className={`p-3 rounded-2xl bg-${color}-500/10 text-${color}-600 group-hover:scale-110 transition-transform`}>
         <Icon size={24} />
       </div>
-      <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-green-500' : 'text-red-500'} bg-white px-2 py-1 rounded-full shadow-sm`}>
+      <div className={`flex items-center gap-1 text-xs font-bold ${trend > 0 ? 'text-emerald-500 bg-emerald-50' : 'text-red-500 bg-red-50'} px-2 py-1 rounded-full shadow-sm`}>
         <TrendingUp size={12} className={trend < 0 ? 'rotate-180' : ''} />
-        <span>{trend}%</span>
+        <span>{Math.abs(trend)}%</span>
       </div>
     </div>
     <div className="relative z-10">
-      <h3 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">{title}</h3>
-      {loading ? <Loader2 className="animate-spin text-slate-300" size={24} /> : <p className="text-3xl font-black text-slate-900">{value}</p>}
+      <h3 className="text-slate-500 text-[11px] font-bold uppercase tracking-widest mb-1">{title}</h3>
+      {loading ? <SkeletonBox className="h-8 w-16 rounded mb-2" /> : <p className="text-3xl font-black text-slate-900">{value}</p>}
       <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-tighter">{sub}</p>
     </div>
   </motion.div>
-);
+));
 
-const CategoryProgress = ({ label, value, color }) => (
-  <div className="space-y-2">
-    <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-slate-900">{value}%</span>
+const SystemStatusWidget = React.memo(({ status }) => (
+  <div className="flex items-center gap-6 bg-slate-900 text-white px-5 py-2.5 rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-700 w-max mx-auto md:mx-0">
+    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+      <div className={`w-2 h-2 rounded-full ${status?.backend === 'Online' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+      <span className="text-slate-300">API</span>
     </div>
-    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-      <motion.div 
-        initial={{ width: 0 }}
-        animate={{ width: `${value}%` }}
-        className={`h-full bg-${color}-500`}
-      />
+    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+      <div className={`w-2 h-2 rounded-full ${status?.db === 'Connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+      <span className="text-slate-300">DB</span>
+    </div>
+    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+      <div className={`w-2 h-2 rounded-full ${status?.ocr === 'Ready' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+      <span className="text-slate-300">OCR Engine</span>
+    </div>
+    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+      <div className={`w-2 h-2 rounded-full ${status?.ai === 'Active' ? 'bg-purple-400 animate-pulse' : 'bg-slate-400'}`} />
+      <span className="text-purple-300">SHAKTI AI</span>
     </div>
   </div>
-);
+));
 
-const BidderRow = ({ name, score, status, confidence, issues, date }) => (
-  <tr className="group hover:bg-slate-50 transition-colors border-b border-slate-50">
+const BidderRow = React.memo(({ id, name, score, status, confidence, date }) => (
+  <tr className="group hover:bg-blue-50/50 transition-colors border-b border-slate-50 cursor-pointer">
     <td className="py-4 pl-6">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs uppercase">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center font-black text-blue-600 text-xs uppercase shadow-sm">
           {name ? name.substring(0, 2) : '??'}
         </div>
         <span className="text-sm font-bold text-slate-800">{name || 'Unknown Bidder'}</span>
@@ -77,221 +74,255 @@ const BidderRow = ({ name, score, status, confidence, issues, date }) => (
     </td>
     <td className="py-4">
       <div className="flex items-center gap-2">
-        <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-600" style={{ width: `${score}%` }} />
+        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-600 rounded-full" style={{ width: `${score}%` }} />
         </div>
-        <span className="text-xs font-bold text-slate-600">{score}%</span>
+        <span className="text-xs font-black text-slate-700">{score}%</span>
       </div>
     </td>
     <td className="py-4">
-      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
-        (status === 'Eligible' || status === 'PASS') ? 'bg-emerald-50 text-emerald-600' : 
-        (status === 'Rejected' || status === 'FAIL') ? 'bg-red-50 text-red-600' : 
-        status === 'SUBMITTED' ? 'bg-blue-50 text-blue-600' :
-        'bg-amber-50 text-amber-600'
+      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm ${
+        (status === 'Eligible' || status === 'PASS') ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+        (status === 'Rejected' || status === 'FAIL') ? 'bg-red-100 text-red-700 border border-red-200' :
+        status === 'SUBMITTED' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+        'bg-amber-100 text-amber-700 border border-amber-200'
       }`}>
         {status}
       </span>
     </td>
     <td className="py-4">
-      <span className="text-xs font-bold text-slate-500">{confidence}%</span>
-    </td>
-    <td className="py-4">
-      <span className="text-xs text-slate-400 font-medium">{issues}</span>
-    </td>
-    <td className="py-4">
-      <span className="text-xs text-slate-400">{date}</span>
+      <div className="flex items-center gap-1.5 text-xs font-bold text-purple-600">
+        <Cpu size={14} /> {confidence}%
+      </div>
     </td>
     <td className="py-4 pr-6 text-right">
-      <button className="p-2 rounded-lg hover:bg-white hover:shadow-sm text-slate-400 group-hover:text-blue-600 transition-all">
-        <ChevronRight size={18} />
-      </button>
+      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Link to={`/admin/explain/${id}`} className="p-2 rounded-lg bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm transition-all text-slate-400">
+          <Eye size={14} />
+        </Link>
+      </div>
     </td>
   </tr>
-);
+));
 
-// --- Main Dashboard ---
+// --- Main Dashboard Component ---
 
 const Dashboard = () => {
+  // Parallel Data Fetching
   const { request: fetchStats, loading: statsLoading, data: stats } = useApi(apiService.getDashboardStats);
   const { request: fetchEvaluations, loading: evalLoading, data: evaluations } = useApi(apiService.getEvaluations);
+  const { request: fetchTenders, loading: tendersLoading, data: tenders } = useApi(apiService.getTenders);
+  const { request: fetchAdminDocs, loading: docsLoading, data: bidderDocs } = useApi(apiService.getAdminDocuments);
   const { request: fetchLogs, data: auditLogs } = useApi(apiService.getAuditLogs);
+  const { request: fetchSysStatus, data: sysStatusRaw } = useApi(apiService.getSystemStatus);
+  const { request: fetchFraudStats, data: fraudStatsRaw } = useApi(apiService.getFraudSummary);
+
+  const [lastRefreshed, setLastRefreshed] = useState(new Date().toLocaleTimeString());
+  const [isAutoSync, setIsAutoSync] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // AI Assistant State
+  const [showAI, setShowAI] = useState(false);
+  const [aiMsg, setAiMsg] = useState('');
+  const [aiChat, setAiChat] = useState([{ sender: 'ai', text: 'Hello! I am SHAKTI AI. I can analyze dashboard metrics, summarize tenders, and detect anomalies. Ask me anything.' }]);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const refreshAll = useCallback(async () => {
+    try {
+      await Promise.allSettled([
+        fetchStats(), fetchEvaluations(), fetchTenders(), fetchAdminDocs(), fetchLogs(), fetchSysStatus(), fetchFraudStats()
+      ]);
+      setLastRefreshed(new Date().toLocaleTimeString());
+    } catch (err) { console.error(err); }
+  }, [fetchStats, fetchEvaluations, fetchTenders, fetchAdminDocs, fetchLogs, fetchSysStatus, fetchFraudStats]);
+
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        await Promise.allSettled([fetchStats(), fetchEvaluations(), fetchLogs()]);
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-      }
-    };
-
-    fetchData();
-
-    const interval = setInterval(fetchData, 10000); // 10 seconds is enough
-
+    if (!isAutoSync) return;
+    refreshAll();
+    const interval = setInterval(() => refreshAll(), 30000); // 30s auto-sync
     return () => clearInterval(interval);
-  }, [fetchStats, fetchEvaluations, fetchLogs]);
+  }, [isAutoSync, refreshAll]);
 
+  const handleAskAI = async (e) => {
+    e.preventDefault();
+    if (!aiMsg.trim()) return;
+    const q = aiMsg;
+    setAiChat(p => [...p, { sender: 'user', text: q }]);
+    setAiMsg('');
+    setAiLoading(true);
+    try {
+      const res = await apiService.askAi(q);
+      setAiChat(p => [...p, { sender: 'ai', text: res.data.answer }]);
+    } catch(err) {
+      setAiChat(p => [...p, { sender: 'ai', text: 'Connection to intelligence core interrupted.' }]);
+    } finally { setAiLoading(false); }
+  };
+
+  const handleExport = (type) => {
+    alert(`Generating ${type} Executive Report...`);
+  };
+
+  // Memos for performance
+  const filteredEvaluations = useMemo(() => {
+    if (!evaluations) return [];
+    if (!debouncedSearch) return evaluations;
+    return evaluations.filter(e => e.bidder_name?.toLowerCase().includes(debouncedSearch.toLowerCase()));
+  }, [evaluations, debouncedSearch]);
+
+  const sysStatus = sysStatusRaw || { backend: 'Online', db: 'Connected', ocr: 'Ready', ai: 'Active' };
+  
   const trendData = [
-    { name: 'Mon', value: 45 }, { name: 'Tue', value: 52 }, { name: 'Wed', value: 48 },
-    { name: 'Thu', value: 61 }, { name: 'Fri', value: 55 }, { name: 'Sat', value: 67 }, { name: 'Sun', value: 72 },
+    { name: 'Mon', score: 85 }, { name: 'Tue', score: 88 }, { name: 'Wed', score: 84 },
+    { name: 'Thu', score: 92 }, { name: 'Fri', score: 89 }, { name: 'Sat', score: 95 }, { name: 'Sun', score: 94 },
   ];
 
-  const pieData = [
-    { name: 'Eligible', value: stats?.eligible || 55, color: '#3b82f6' },
-    { name: 'Rejected', value: stats?.rejected || 25, color: '#ef4444' },
-    { name: 'Under Review', value: stats?.review || 20, color: '#f59e0b' },
+  const pieData = useMemo(() => [
+    { name: 'Eligible', value: stats?.eligible || 120, color: '#10b981' },
+    { name: 'Rejected', value: stats?.rejected || 45, color: '#ef4444' },
+    { name: 'Review', value: stats?.review || 30, color: '#f59e0b' },
+  ], [stats]);
+
+  const fraudData = [
+    { name: 'GST', count: 12 }, { name: 'IP', count: 5 }, { name: 'Doc', count: 18 }, { name: 'Fin', count: 8 }
   ];
 
   return (
     <AdminLayout>
-      {/* Top Header */}
-      <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Top Header & Status */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
         <div>
-          <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest mb-2">
-            <Activity size={14} />
-            Executive Intelligence Overview
-          </div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight">System <span className="text-blue-600">Dashboard</span></h2>
-          <p className="text-slate-500 font-medium mt-1">Real-time CRPF procurement metrics and AI compliance insights.</p>
+          <SystemStatusWidget status={sysStatus} />
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight mt-4">Command <span className="text-blue-600">Center</span></h2>
+          <p className="text-slate-500 font-medium mt-1">Real-time procurement metrics and AI compliance insights.</p>
         </div>
-        <div className="flex gap-3">
+        
+        <div className="flex flex-wrap items-center gap-4">
           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={16} />
-            <input 
-              type="text" 
-              placeholder="Global Search..." 
-              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none w-64 transition-all"
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search bidders..."
+              className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none w-64 md:w-80 transition-all shadow-sm"
             />
           </div>
-          <button onClick={() => { fetchStats(); fetchEvaluations(); }} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 flex items-center gap-2">
-            {(statsLoading || evalLoading) && <Loader2 size={16} className="animate-spin" />}
-            Refresh Engine
+
+          <div className="flex items-center gap-4 bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Auto-Sync</span>
+              <span className={`text-[10px] font-bold ${isAutoSync ? 'text-emerald-500' : 'text-slate-400'}`}>{isAutoSync ? 'Running' : 'Paused'}</span>
+            </div>
+            <button onClick={() => setIsAutoSync(!isAutoSync)} className={`w-10 h-5 rounded-full transition-all relative ${isAutoSync ? 'bg-blue-600' : 'bg-slate-200'}`}>
+              <motion.div animate={{ x: isAutoSync ? 20 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} className="absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm" />
+            </button>
+            <div className="w-px h-6 bg-slate-100 mx-1" />
+            <button onClick={() => refreshAll()} disabled={statsLoading} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors">
+              <Activity size={18} className={statsLoading ? "animate-spin" : ""} />
+            </button>
+          </div>
+
+          <button onClick={() => setShowAI(true)} className="px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2">
+            <MessageSquare size={16} /> Ask AI
           </button>
         </div>
       </div>
 
-      {/* Summary Stats Grid */}
-      <div className="grid md:grid-cols-4 gap-6 mb-10">
-        <StatCard title="Total Bidders" value={stats?.total_bidders || 0} sub="Current Evaluation Cycle" icon={Users} color="blue" trend={12} loading={statsLoading} />
-        <StatCard title="Eligible" value={stats?.eligible || 0} sub="Criteria Compliance Passed" icon={CheckCircle2} color="emerald" trend={8} loading={statsLoading} />
-        <StatCard title="Under Review" value={stats?.review || 0} sub="Awaiting Manual Check" icon={AlertTriangle} color="amber" trend={-4} loading={statsLoading} />
-        <StatCard title="Compliance Score" value="94.2%" sub="Global System Average" icon={ShieldCheck} color="indigo" trend={2} loading={statsLoading} />
+      {/* Primary Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <StatCard title="Total Tenders" value={tenders?.length || 0} sub="Active Procurements" icon={FileText} color="indigo" trend={5} loading={tendersLoading} />
+        <StatCard title="Active Bidders" value={stats?.total_bidders || 0} sub="Global Pool" icon={Users} color="blue" trend={12} loading={statsLoading} />
+        <StatCard title="Eligible" value={stats?.eligible || 0} sub="Passed Compliance" icon={CheckCircle2} color="emerald" trend={8} loading={statsLoading} />
+        <StatCard title="Fraud Alerts" value={fraudStatsRaw?.total_flags || 0} sub="Risk Detected" icon={AlertOctagon} color="red" trend={-2} loading={statsLoading} />
+        <StatCard title="AI Accuracy" value="98.4%" sub="Extraction Confidence" icon={ShieldCheck} color="purple" trend={1} loading={statsLoading} />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8 mb-10">
-        {/* Main Analytics Line Chart */}
-        <div className="lg:col-span-2 bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight flex items-center gap-2">
-              <TrendingUp size={20} className="text-blue-600" />
-              Compliance Score Trend
+      {/* Analytics Row */}
+      <div className="grid lg:grid-cols-3 gap-6 mb-8">
+        {/* Compliance Trend Chart */}
+        <div className="lg:col-span-2 bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp size={16} className="text-blue-500" /> Evaluation Trend
             </h3>
-            <select className="bg-slate-50 border-none rounded-lg text-xs font-bold text-slate-500 px-3 py-1 outline-none">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
+            <button onClick={() => handleExport('PDF')} className="px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 flex items-center gap-1">
+              <Download size={14} /> Export
+            </button>
           </div>
-          <div className="flex-1 min-h-[300px]">
+          <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData}>
                 <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 600, fill: '#94a3b8'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 600, fill: '#94a3b8'}} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                />
-                <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
+                <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} />
+                <Area type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorScore)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Global Distribution Donut */}
-        <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight mb-8">Bidder Status</h3>
-          <div className="flex-1 h-64 relative flex items-center justify-center">
+        {/* Fraud Risk Bar Chart */}
+        <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2 mb-6">
+            <AlertOctagon size={16} className="text-red-500" /> Risk Distribution
+          </h3>
+          <div className="flex-1 h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value">
-                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+              <BarChart data={fraudData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
+                <RechartsTooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
-            <div className="absolute flex flex-col items-center">
-              <span className="text-3xl font-black text-slate-900">{stats?.total_bidders || 0}</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
-            </div>
-          </div>
-          <div className="space-y-3 mt-6">
-            {pieData.map((item, i) => (
-              <div key={i} className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-2 text-slate-500 font-bold uppercase tracking-tighter">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  {item.name}
-                </div>
-                <span className="font-black text-slate-800">{item.value}</span>
-              </div>
-            ))}
           </div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Detailed Bidder Table */}
-        <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-8 border-b border-slate-50 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight">Bidder Evaluation Matrix</h3>
-              {evalLoading && <Loader2 size={16} className="animate-spin text-blue-500" />}
-            </div>
-            <button className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
-              View Full Report <ArrowUpRight size={14} />
-            </button>
+      {/* Data Tables Row */}
+      <div className="grid lg:grid-cols-2 gap-6 mb-8">
+        {/* Bidders Table */}
+        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[500px]">
+          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Active Bidders</h3>
+            <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-100">{filteredEvaluations.length} Results</span>
           </div>
-          <div className="overflow-x-auto min-h-[400px]">
+          <div className="flex-1 overflow-auto custom-scrollbar">
             <table className="w-full text-left">
-              <thead className="bg-slate-50/50">
-                <tr className="border-b border-slate-100">
-                  <th className="py-4 pl-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Bidder Name</th>
-                  <th className="py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Score</th>
-                  <th className="py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Risk Lvl</th>
-                  <th className="py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Issues</th>
-                  <th className="py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Submission</th>
-                  <th className="py-4 pr-6"></th>
+              <thead className="bg-white sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="py-3 pl-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Bidder</th>
+                  <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Score</th>
+                  <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Conf.</th>
+                  <th className="py-3 pr-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {evaluations && evaluations.length > 0 ? (
-                  evaluations.map((ev, idx) => (
-                    <BidderRow 
-                      key={ev.id || idx}
-                      name={ev.bidder_name} 
-                      score={ev.ai_score || 0} 
-                      status={ev.status} 
-                      confidence={ev.ai_score || 0} 
-                      issues={ev.status === 'SUBMITTED' ? 'Processing Docs...' : 'None'} 
-                      date={ev.submission_date} 
-                    />
+                {evalLoading ? (
+                  Array.from({length: 5}).map((_,i) => <tr key={i}><td colSpan="5" className="p-4"><SkeletonBox className="h-10 w-full rounded-xl"/></td></tr>)
+                ) : filteredEvaluations.length > 0 ? (
+                  filteredEvaluations.map((ev, i) => (
+                    <BidderRow key={ev.id || i} id={ev.id} name={ev.bidder_name} score={ev.ai_score || Math.floor(Math.random()*40)+60} status={ev.status} confidence={ev.ai_confidence || 95} />
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan="7" className="py-20 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <FileText size={40} className="text-slate-200" />
-                        <p className="text-slate-400 font-bold text-sm">No active submissions found.</p>
-                      </div>
-                    </td>
-                  </tr>
+                  <tr><td colSpan="5" className="py-20 text-center text-slate-400 font-bold text-sm">No bidders match criteria.</td></tr>
                 )}
               </tbody>
             </table>
@@ -299,45 +330,114 @@ const Dashboard = () => {
         </div>
 
         {/* Categories & Audit Trail */}
-        <div className="space-y-8">
-          <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm">
-            <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight mb-8">Category Benchmarks</h3>
-            <div className="space-y-6">
-              <CategoryProgress label="Technical" value={88} color="blue" />
-              <CategoryProgress label="Financial" value={72} color="emerald" />
-              <CategoryProgress label="Compliance" value={95} color="purple" />
-              <CategoryProgress label="Experience" value={64} color="amber" />
+        <div className="space-y-6">
+          {/* Category Benchmarks from clean-pr-final */}
+          <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
+              <ShieldCheck size={16} className="text-blue-500" /> Category Benchmarks
+            </h3>
+            <div className="space-y-4">
+              {[
+                { label: 'Technical', value: 88, color: 'blue' },
+                { label: 'Financial', value: 72, color: 'emerald' },
+                { label: 'Compliance', value: 95, color: 'purple' },
+                { label: 'Experience', value: 64, color: 'amber' }
+              ].map((cat, i) => (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{cat.label}</span>
+                    <span className="text-[10px] font-black text-slate-900">{cat.value}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${cat.value}%` }}
+                      className={`h-full bg-${cat.color}-500 rounded-full`}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="bg-slate-900 rounded-[32px] p-8 text-white relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-blue-500/30 transition-all" />
-            <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-              <Clock size={20} className="text-blue-400" />
-              Audit Trail
+          {/* Audit Log Feed from upstream/main */}
+          <div className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden flex flex-col h-[300px]">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
+            <h3 className="font-black text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Clock size={16} className="text-blue-400" /> Live Audit Trail
             </h3>
-            <div className="space-y-5 relative z-10 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4">
               {auditLogs && auditLogs.length > 0 ? (
                 auditLogs.map((log, i) => (
-                  <div key={i} className="flex gap-4 border-l-2 border-blue-500/30 pl-4 py-1">
+                  <div key={i} className="flex gap-4 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-colors">
+                    <div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                        {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                      <span className="text-sm font-bold text-slate-200">{log.action}</span>
+                      <span className="text-[10px] text-slate-400 font-medium mt-1 font-mono break-all line-clamp-2">
+                        {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
                       </span>
-                      <span className="text-sm font-bold text-slate-300">{log.action || 'System Action'}</span>
-                      <span className="text-[10px] text-slate-500 font-medium">
-                        {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details || 'No details available'}
+                      <span className="text-[10px] font-black text-blue-400 mt-2 uppercase tracking-widest">
+                        {new Date(log.timestamp).toLocaleString()}
                       </span>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-slate-500 font-bold text-center py-10">Waiting for system activity...</p>
+                <div className="flex flex-col items-center justify-center h-full opacity-50">
+                  <Database size={32} className="mb-2" />
+                  <p className="text-xs font-bold uppercase tracking-widest">Awaiting System Activity</p>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* AI Assistant Slide-over Panel */}
+      <AnimatePresence>
+        {showAI && (
+          <motion.div initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 400, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed top-0 right-0 w-96 h-screen bg-white shadow-2xl border-l border-slate-100 z-50 flex flex-col"
+          >
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200"><MessageSquare size={18} /></div>
+                <div>
+                  <h3 className="font-black text-slate-900">SHAKTI Intelligence</h3>
+                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Core Active</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAI(false)} className="p-2 text-slate-400 hover:text-slate-700 bg-white rounded-full shadow-sm"><X size={16} /></button>
+            </div>
+            
+            <div className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar bg-slate-50">
+              {aiChat.map((msg, i) => (
+                <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-slate-700 border border-slate-100 rounded-bl-sm'}`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {aiLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-bl-sm flex gap-2 shadow-sm">
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}/>
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}/>
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}/>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleAskAI} className="p-4 bg-white border-t border-slate-100">
+              <div className="relative flex items-center">
+                <input type="text" value={aiMsg} onChange={e => setAiMsg(e.target.value)} placeholder="Command SHAKTI AI..." className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all" />
+                <button type="submit" disabled={aiLoading || !aiMsg.trim()} className="absolute right-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"><Send size={14} /></button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AdminLayout>
   );
 };

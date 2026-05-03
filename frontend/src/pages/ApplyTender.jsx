@@ -131,9 +131,15 @@ const DocumentUpload = ({ label, type, bidderId, tenderId, docType, onUploadSucc
         ) : (
           <div className="flex gap-2">
             {!file ? (
-              <label className="btn-secondary py-2 text-sm cursor-pointer">
+              <label htmlFor={`doc-upload-${docType}`} className="btn-secondary py-2 text-sm cursor-pointer">
                 Select File
-                <input type="file" className="hidden" onChange={handleFileChange} />
+                <input 
+                  id={`doc-upload-${docType}`}
+                  name={`doc-upload-${docType}`}
+                  type="file" 
+                  className="hidden" 
+                  onChange={handleFileChange} 
+                />
               </label>
             ) : (
               <div className="flex items-center gap-3">
