@@ -8,7 +8,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 // --- Shared Components ---
@@ -57,8 +57,19 @@ const ProgressStep = ({ step, title, status }) => {
 // --- Main Bidder Dashboard ---
 
 const BidderStatus = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   // Define active tab
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'track', 'documents', 'clarification'
+  const [activeTab, setActiveTab] = useState('overview'); 
+
+  // Sync tab with URL path
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/bidder/dashboard') setActiveTab('overview');
+    else if (path === '/bidder/applications') setActiveTab('track');
+    else if (path === '/bidder/messages') setActiveTab('clarification');
+    else if (path === '/bidder/status') setActiveTab('track');
+  }, [location.pathname]);
 
   // Data Fetching
   const BIDDER_ID = 1; // Assuming logged in user ID is 1 for now
@@ -408,13 +419,6 @@ const BidderStatus = () => {
             </div>
             <h2 className="text-4xl font-black text-slate-900 tracking-tight">Bidder <span className="text-blue-600">Workspace</span></h2>
             <p className="text-slate-500 font-medium mt-1">Manage tenders, submit documents, and track AI evaluations securely.</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
-            <button onClick={() => setActiveTab('overview')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Dashboard</button>
-            <button onClick={() => setActiveTab('track')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'track' || activeTab === 'documents' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>My Applications</button>
-            <button onClick={() => setActiveTab('clarification')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'clarification' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-              Clarifications {isRejected && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"/>}
-            </button>
           </div>
         </div>
 
