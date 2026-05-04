@@ -41,6 +41,7 @@ import models.bidder
 import models.evaluation
 import models.audit_log
 import models.fraud_alert
+import models.criterion
 
 # ==================================================
 # MODEL IMPORTS
@@ -68,18 +69,28 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("🚀 SHAKTI AI Backend - Startup Sequence Initialized")
     
-    # 1. Non-blocking Database Initialization
-    def init_db():
-        try:
-            logger.info("📡 Database: Verifying tables...")
-            Base.metadata.create_all(bind=engine)
-            logger.info("✅ Database: Tables verified/created.")
-        except Exception as e:
-            logger.error(f"❌ Database: Initialization failed (Background): {e}")
-
-    import threading
-    db_thread = threading.Thread(target=init_db, daemon=True)
-    db_thread.start()
+    # 1. Synchronous Database Initialization & Migration (Transaction-Safe)
+    try:
+        logger.info("📡 Database: Verifying tables and schema...")
+        Base.metadata.create_all(bind=engine)
+        
+        # Safe migration using Inspector
+        inspector = inspect(engine)
+        existing_columns = [c['name'] for c in inspector.get_columns("criteria")]
+        
+        with engine.begin() as conn:
+            if "weightage" not in existing_columns:
+                logger.info("➕ Migrating: Adding 'weightage' to criteria")
+                conn.execute(text("ALTER TABLE criteria ADD COLUMN weightage FLOAT DEFAULT 0.0"))
+            
+            if "max_score" not in existing_columns:
+                logger.info("➕ Migrating: Adding 'max_score' to criteria")
+                conn.execute(text("ALTER TABLE criteria ADD COLUMN max_score FLOAT DEFAULT 100.0"))
+                
+        logger.info("✅ Database: Schema is up to date.")
+    except Exception as e:
+        logger.error(f"❌ Database: Initialization failed: {e}")
+        logger.error(traceback.format_exc())
 
     yield
     logger.info("🛑 SHAKTI AI Backend - Shutdown Sequence Initiated")
@@ -97,9 +108,19 @@ app = FastAPI(
 # ==================================================
 # CORS (Must be at the top for maximum reliability)
 # ==================================================
+# ==================================================
+# CORS (Strict but Flexible for Development)
+# ==================================================
+# When allow_credentials=True, allow_origins cannot be ["*"].
+# We allow the most common local development ports.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

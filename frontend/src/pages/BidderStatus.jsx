@@ -3,7 +3,7 @@ import BidderLayout from '../layouts/BidderLayout';
 import { 
   Clock, CheckCircle, AlertCircle, FileText, Download, ShieldCheck, 
   TrendingUp, History, UploadCloud, Search, CheckCircle2, 
-  AlertTriangle, Loader2, MessageSquare, Activity, X, Eye, FileJson, Paperclip, Send
+  AlertTriangle, Loader2, MessageSquare, Activity, X, Eye, FileJson, Paperclip, Send, Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiService } from '../services/api';
@@ -79,6 +79,12 @@ const BidderStatus = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedPdf, setSelectedPdf] = useState(null); // For PDF Source Mapping Modal
   
+  // Criteria States
+  const [showCriteriaModal, setShowCriteriaModal] = useState(false);
+  const [activeCriteriaTender, setActiveCriteriaTender] = useState(null);
+  const [tenderCriteria, setTenderCriteria] = useState([]);
+  const [criteriaLoading, setCriteriaLoading] = useState(false);
+  
   const fetchAll = useCallback(async () => {
     try {
       await Promise.allSettled([
@@ -111,6 +117,20 @@ const BidderStatus = () => {
 
   const handleDownloadReport = () => {
     alert("Generating AI Evaluation PDF Report...");
+  };
+
+  const viewTenderCriteria = async (tender) => {
+    setActiveCriteriaTender(tender);
+    setShowCriteriaModal(true);
+    setCriteriaLoading(true);
+    try {
+      const res = await apiService.getCriteria(tender.id);
+      setTenderCriteria(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch criteria", err);
+    } finally {
+      setCriteriaLoading(false);
+    }
   };
 
   const openPdfSource = (clause) => {
@@ -197,9 +217,14 @@ const BidderStatus = () => {
                         </td>
                         <td className="py-4 text-xs font-bold text-slate-500">Dec 31, 2026</td>
                         <td className="py-4 pr-8 text-right">
-                          <button className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm shadow-blue-200 transition-all">
-                            Apply Now
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => viewTenderCriteria(t)} className="px-4 py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all flex items-center gap-1.5">
+                              <Target size={14}/> Criteria
+                            </button>
+                            <button className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm shadow-blue-200 transition-all">
+                              Apply Now
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -456,6 +481,70 @@ const BidderStatus = () => {
                 <div className="p-6 border-t border-slate-100 bg-white flex justify-between items-center">
                   <p className="text-xs text-slate-500 font-bold">Confidence Score: <span className="text-emerald-600 font-black">99.8%</span></p>
                   <button onClick={() => setSelectedPdf(null)} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 shadow-sm transition-all">Close Viewer</button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Evaluation Criteria Modal */}
+        <AnimatePresence>
+          {showCriteriaModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCriteriaModal(false)} />
+              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white rounded-[32px] w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col border border-slate-200">
+                <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <div>
+                    <h3 className="font-black text-slate-800 text-xl uppercase tracking-tight flex items-center gap-3">
+                      <Target size={24} className="text-blue-600" /> Evaluation Criteria
+                    </h3>
+                    <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{activeCriteriaTender?.title}</p>
+                  </div>
+                  <button onClick={() => setShowCriteriaModal(false)} className="p-3 text-slate-400 hover:bg-slate-200 rounded-2xl transition-all"><X size={24} /></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 bg-slate-50/30">
+                  {criteriaLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+                      <p className="text-slate-500 font-bold animate-pulse">Fetching official criteria...</p>
+                    </div>
+                  ) : tenderCriteria?.length > 0 ? (
+                    <div className="space-y-4">
+                      {tenderCriteria.map((c) => (
+                        <div key={c.id} className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all group">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${c.mandatory ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                                {c.mandatory ? 'Mandatory' : 'Optional'}
+                              </span>
+                              <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-slate-200">
+                                {c.category}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-blue-600">{c.weightage || 0}%</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Weightage</p>
+                            </div>
+                          </div>
+                          <h4 className="text-lg font-black text-slate-800 mb-2">{c.title}</h4>
+                          <p className="text-sm text-slate-500 leading-relaxed font-medium mb-4">{c.description || 'No description provided.'}</p>
+                          <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Score: <span className="text-slate-900 font-black">{c.max_score || 100}</span></span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confidence: <span className="text-emerald-500 font-black">{Math.round((c.confidence || 0.9) * 100)}%</span></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                      <AlertCircle size={48} className="mx-auto text-slate-300 mb-4" />
+                      <h3 className="text-lg font-bold text-slate-800">No criteria defined yet</h3>
+                      <p className="text-slate-400 text-sm max-w-xs mx-auto mt-1">The procurement officer has not yet published the evaluation weightage for this tender.</p>
+                    </div>
+                  )}
+                </div>
+                <div className="p-6 border-t border-slate-100 bg-white flex justify-end">
+                  <button onClick={() => setShowCriteriaModal(false)} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-200 transition-all active:scale-95">Got it, Thanks</button>
                 </div>
               </motion.div>
             </div>

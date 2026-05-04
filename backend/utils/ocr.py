@@ -161,7 +161,59 @@ def extract_pdf_text(pdf_path):
         logger.error(f"❌ Parallel PDF Extraction Failed: {e}")
         return ""
 
+def extract_text_from_any_file(file_path):
+    """
+    Safely extract text from various file types following specific security requirements:
+    - PDF: Uses pdfplumber (No .decode())
+    - Images: Uses Tesseract (OCR)
+    - Text: Uses safe .decode("utf-8", errors="ignore") with null checks
+    """
+    if not file_path or not os.path.exists(file_path):
+        logger.error(f"❌ File not found or path is None: {file_path}")
+        return ""
+
+    try:
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        # 1. Handle PDF (Requirement: DO NOT use .decode())
+        if ext == '.pdf':
+            return extract_pdf_text(file_path)
+            
+        # 2. Handle Images (OCR)
+        elif ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
+            return extract_image_text(file_path)
+            
+        # 3. Handle Text files (Requirement: safe decode with errors="ignore")
+        elif ext in ['.txt', '.csv', '.json']:
+            try:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                
+                if content is None:
+                    logger.error(f"⚠️ File content is None for {file_path}")
+                    return ""
+                
+                if len(content) == 0:
+                    logger.warning(f"⚠️ File {file_path} is empty.")
+                    return ""
+                    
+                # Safe decoding as per requirement
+                return content.decode("utf-8", errors="ignore")
+            except Exception as e:
+                logger.error(f"❌ Failed to decode text file {file_path}: {e}")
+                return ""
+        
+        else:
+            logger.warning(f"⚠️ Unsupported file extension: {ext}")
+            return ""
+            
+    except Exception as e:
+        logger.error(f"❌ Critical error in extract_text_from_any_file: {e}")
+        return ""
+
 def get_ocr_confidence(image_path):
+    if not image_path or not os.path.exists(image_path):
+        return 0
     if not HAS_TESSERACT_LIB or not HAS_TESSERACT_BIN:
         return 0.95
     try:

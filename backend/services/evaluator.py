@@ -1,18 +1,21 @@
 from services.ai_service import AIService
-from utils.ocr import extract_pdf_text, extract_image_text
+from utils.ocr import extract_text_from_any_file
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # AIService is now instantiated locally within functions to avoid blocking imports
 
 async def process_tender_upload(file_path: str):
     """
-    Full pipeline for tender upload: OCR -> AI Extraction.
+    Full pipeline for tender upload: OCR/Extraction -> AI Extraction.
     """
-    # 1. Extract Text
-    if file_path.endswith('.pdf'):
-        text = extract_pdf_text(file_path)
-    else:
-        text = extract_image_text(file_path)
+    # 1. Extract Text using safe handler
+    text = extract_text_from_any_file(file_path)
+    
+    if not text:
+        logger.warning(f"⚠️ No text extracted from {file_path}")
     
     # 2. AI Extraction
     criteria = await AIService().extract_tender_criteria(text)
@@ -30,16 +33,17 @@ async def process_bidder_evaluation(tender_criteria: dict, bidder_docs: list):
     aggregated_text = ""
     for doc in bidder_docs:
         file_path = doc.get('file_path')
-        if not file_path or not os.path.exists(file_path):
+        if not file_path:
+            logger.warning(f"⚠️ Document {doc.get('type')} has no file path.")
             continue
             
-        if file_path.endswith('.pdf'):
-            text = extract_pdf_text(file_path)
-        else:
-            text = extract_image_text(file_path)
+        text = extract_text_from_any_file(file_path)
         
-        aggregated_text += f"\n--- Document: {doc.get('type')} ---\n"
-        aggregated_text += text
+        if text:
+            aggregated_text += f"\n--- Document: {doc.get('type')} ---\n"
+            aggregated_text += text
+        else:
+            logger.warning(f"⚠️ Could not extract text from document {doc.get('type')} ({file_path})")
     
     # 2. AI Evaluate
     evaluation_result = await AIService().evaluate_bidder_docs(tender_criteria, aggregated_text)
