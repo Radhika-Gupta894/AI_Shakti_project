@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminLayout from '../layouts/AdminLayout';
 import { 
@@ -41,24 +41,38 @@ const CategoryBadge = ({ category }) => {
 
 const CriteriaAnalysis = () => {
   const navigate = useNavigate();
-  const { request: fetchTender, loading, data: tender } = useApi(apiService.getLatestTender);
-  
-  // States
+  const [criteria, setCriteria] = useState([]);
+  const [tenders, setTenders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedTender, setSelectedTender] = useState(null);
+  const [selectedTenderId, setSelectedTenderId] = useState(null);
+
+  // Filter & UI States
   const [filter, setFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'category', direction: 'asc' });
   const [expandedId, setExpandedId] = useState(null);
-  
+
   // Modals
   const [explainModal, setExplainModal] = useState(null);
   const [editCriteria, setEditCriteria] = useState(null);
   const [addCriteriaModal, setAddCriteriaModal] = useState(false);
-  const [newCriteria, setNewCriteria] = useState({ name: '', category: 'Financial', mandatory: true });
+  const [newCriteria, setNewCriteria] = useState({ 
+    tender_id: '', 
+    title: '', 
+    description: '', 
+    category: 'Technical', 
+    mandatory: true,
+    value: '',
+    confidence: 0.90,
+    weightage: 0,
+    max_score: 100
+  });
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [tenderSummary, setTenderSummary] = useState(null);
   
   const [isFinalizing, setIsFinalizing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [toast, setToast] = useState(null);
   
   // PDF states
   const [zoom, setZoom] = useState(1);
@@ -81,77 +95,104 @@ const CriteriaAnalysis = () => {
   const messagesEndRef = useRef(null);
   const pollingRef = useRef(null);
 
-  useEffect(() => { fetchTender().catch(() => {}); }, [fetchTender]);
-
+  // Load Initial Data
   useEffect(() => {
-    if (tender?.status === 'processing' && !pollingRef.current) {
-      pollingRef.current = setInterval(() => fetchTender().catch(() => {}), 5000);
-    } else if (tender?.status !== 'processing' && pollingRef.current) {
-      clearInterval(pollingRef.current); pollingRef.current = null;
-    }
-    return () => clearInterval(pollingRef.current);
-  }, [tender?.status, fetchTender]);
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try { const res = await apiService.getSystemStatus(); if(res.data) setSysStatus(res.data); } catch(e) {}
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        const [tenderRes, tendersRes] = await Promise.all([
+          apiService.getLatestTender(),
+          apiService.getTenders()
+        ]);
+        
+        setTenders(tendersRes.data || []);
+        if (tenderRes.data) {
+          setSelectedTender(tenderRes.data);
+          setSelectedTenderId(tenderRes.data.id);
+          setNewCriteria(prev => ({ ...prev, tender_id: tenderRes.data.id }));
+          fetchCriteria(tenderRes.data.id);
+        }
+      } catch (err) {
+        console.error("Initialization failed", err);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    fetchStatus();
-    const intv = setInterval(fetchStatus, 10000);
-    return () => clearInterval(intv);
+    init();
   }, []);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMsgs]);
+  const fetchCriteria = async (tenderId) => {
+    try {
+      const res = await apiService.getCriteria(tenderId);
+      setCriteria(res.data || []);
+    } catch (err) {
+      showToast("Failed to fetch criteria", "error");
+    }
+  };
 
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
   const fetchSummary = async () => {
     try {
       const res = await apiService.getTenderSummary();
       setTenderSummary(res.data.summary);
       setShowSummaryModal(true);
     } catch(e) {
-      alert("Failed to load AI summary");
+      showToast("Failed to load AI summary", "error");
     }
   }
 
-  const criteriaData = tender?.criteria || { financial: [], technical: [], compliance: [] };
-  let flattenedCriteria = [
-    ...(criteriaData.financial || criteriaData.financial_criteria || []).map((c, i) => ({ ...c, id: `fin_${i}`, category: 'Financial', requirement: c.name || c.description })),
-    ...(criteriaData.technical || criteriaData.technical_criteria || []).map((c, i) => ({ ...c, id: `tech_${i}`, category: 'Technical', requirement: c.name || c.description })),
-    ...(criteriaData.compliance || criteriaData.compliance_criteria || []).map((c, i) => ({ ...c, id: `comp_${i}`, category: 'Compliance', requirement: c.name || c.description })),
-  ];
-
-  if (flattenedCriteria.length === 0) {
-    flattenedCriteria = [
-      { id: 'fin_m1', category: 'Financial', name: 'Minimum Turnover ₹5 Cr', description: 'Bidder must have an average annual turnover of at least ₹5 Crores over the last 3 financial years.', mandatory: true, confidence: 98 },
-      { id: 'tech_m1', category: 'Technical', name: 'ISO 9001 Certification', description: 'Bidder must possess a valid ISO 9001:2015 certification for quality management.', mandatory: true, confidence: 92 },
-      { id: 'comp_m1', category: 'Compliance', name: 'GST Registration Certificate', description: 'Valid GST registration certificate is required to be submitted.', mandatory: true, confidence: 99 },
-      { id: 'exp_m1', category: 'Experience', name: 'Minimum 3 Past Projects', description: 'Bidder should have completed at least 3 similar government projects in the last 5 years.', mandatory: false, confidence: 75 },
-      { id: 'fin_m2', category: 'Financial', name: 'Positive Net Worth', description: 'The net worth of the bidder must be positive as per the latest audited balance sheet.', mandatory: true, confidence: 85 },
-    ];
+  const handleAIExtract = async () => {
+    if (!selectedTenderId) return showToast("Please select a tender first", "error");
+    setIsLoading(true);
+    try {
+      const res = await apiService.extractCriteria(selectedTenderId);
+      if (res.data.success) {
+        // The backend now returns the full list of criteria for this tender
+        setCriteria(res.data.data || []);
+        showToast(`AI successfully extracted ${res.data.count} new criteria!`);
+      } else {
+        throw new Error(res.data.error || "AI was unable to process this document");
+      }
+    } catch (err) {
+      console.error("❌ AI Extraction Error:", err);
+      const msg = err.response?.data?.error || err.message || "AI Extraction failed";
+      showToast(msg, "error");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  const filteredCriteria = flattenedCriteria
-    .filter(c => filter === 'All' || c.category === filter)
-    .filter(c => searchQuery === '' || c.requirement.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredCriteria = useMemo(() => {
+    return criteria
+      .filter(c => filter === 'All' || c.category === filter)
+      .filter(c => searchQuery === '' || 
+        (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (c.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
+  }, [criteria, filter, searchQuery]);
 
-  const handleSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
-  const sortedCriteria = [...filteredCriteria].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-    let aVal = sortConfig.key === 'requirement' ? a.name || a.description : sortConfig.key === 'status' ? a.mandatory : a[sortConfig.key];
-    let bVal = sortConfig.key === 'requirement' ? b.name || b.description : sortConfig.key === 'status' ? b.mandatory : b[sortConfig.key];
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  const sortedCriteria = useMemo(() => {
+    if (!sortConfig.key) return filteredCriteria;
+    return [...filteredCriteria].sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredCriteria, sortConfig]);
 
   const handleExport = (type) => {
     if (type === 'JSON') {
-       const jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flattenedCriteria, null, 2));
+       const jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(criteria, null, 2));
        const link = document.createElement("a");
        link.href = jsonString; link.download = `Criteria_Analysis.json`; link.click();
        return;
     }
-    const csv = "data:text/csv;charset=utf-8," + "Category,Requirement,Type,Confidence\n" + flattenedCriteria.map(c => `"${c.category}","${c.requirement.replace(/"/g, '""')}","${c.mandatory ? 'Mandatory' : 'Optional'}","${c.confidence || 90}%"`).join("\n");
+    const csv = "data:text/csv;charset=utf-8," + "Category,Title,Type,Confidence\n" + criteria.map(c => `"${c.category}","${(c.title || '').replace(/"/g, '""')}","${c.mandatory ? 'Mandatory' : 'Optional'}","${c.confidence * 100 || 90}%"`).join("\n");
     const link = document.createElement("a");
     link.href = encodeURI(csv); link.download = `Criteria_${type}.csv`; link.click();
   };
@@ -237,35 +278,100 @@ const CriteriaAnalysis = () => {
   };
 
   const handleSaveEdit = async () => {
-    try { await apiService.editCriteria(editCriteria); } catch(e){}
-    setEditCriteria(null);
+    if (!editCriteria.title.trim()) return showToast("Title is required", "error");
+    try { 
+      const payload = {
+        ...editCriteria,
+        weightage: parseFloat(editCriteria.weightage) || 0,
+        max_score: parseFloat(editCriteria.max_score) || 0
+      };
+      const res = await apiService.updateCriterion(editCriteria.id, payload);
+      if (res.data.success) {
+        setCriteria(prev => prev.map(c => c.id === editCriteria.id ? res.data.data : c));
+        showToast("Criteria updated successfully!");
+        setEditCriteria(null);
+      } else {
+        throw new Error(res.data.error || "Update rejected");
+      }
+    } catch(e){
+      const msg = e.response?.data?.detail || e.response?.data?.error || e.message || "Failed to update criteria";
+      showToast(msg, "error");
+    }
   };
 
   const handleAddCriteria = async () => {
-    try { await apiService.addCriteria(newCriteria); } catch(e){}
-    setAddCriteriaModal(false);
-    setNewCriteria({ name: '', category: 'Financial', mandatory: true });
-  }
+    if (!newCriteria.tender_id) return showToast("Please select a tender", "error");
+    if (!newCriteria.title.trim()) return showToast("Title is required", "error");
+    
+    try {
+      const payload = {
+        ...newCriteria,
+        tender_id: parseInt(newCriteria.tender_id, 10),
+        weightage: parseFloat(newCriteria.weightage) || 0,
+        max_score: parseFloat(newCriteria.max_score) || 0
+      };
+      
+      console.log("🚀 Submitting Criteria Payload:", payload);
+      
+      const res = await apiService.addCriterion(payload);
+      if (res.data.success) {
+        setCriteria(prev => [res.data.data, ...prev]);
+        showToast("Criteria added successfully!");
+        setAddCriteriaModal(false);
+        setNewCriteria({ 
+          tender_id: selectedTenderId || '', 
+          title: '', 
+          description: '', 
+          category: 'Technical', 
+          mandatory: true,
+          confidence: 0.90,
+          weightage: 0,
+          max_score: 100
+        });
+      } else {
+        throw new Error(res.data.error || "Server rejected the request");
+      }
+    } catch (err) {
+      console.error("❌ Add Criteria Failed:", err);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || "Failed to add criteria";
+      showToast(errorMsg, "error");
+    }
+  };
+
+  const handleDeleteCriteria = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this criteria?")) return;
+    try {
+      await apiService.deleteCriterion(id);
+      setCriteria(prev => prev.filter(c => c.id !== id));
+      showToast("Criteria deleted successfully!");
+    } catch (err) {
+      showToast("Failed to delete criteria", "error");
+    }
+  };
 
   const handleHumanReview = (item) => {
-    alert(`Criterion "${item.name}" flagged for manual human review.`);
+    showToast(`Criterion "${item.title}" flagged for manual human review.`, "success");
   }
 
   const stats = {
-    total: flattenedCriteria.length, mandatory: flattenedCriteria.filter(c => c.mandatory).length, optional: flattenedCriteria.filter(c => !c.mandatory).length,
-    confidence: flattenedCriteria.length > 0 ? Math.round(flattenedCriteria.reduce((a, c) => a + (c.confidence || 90), 0) / flattenedCriteria.length) : 0
+    total: criteria.length, 
+    mandatory: criteria.filter(c => c.mandatory).length, 
+    optional: criteria.filter(c => !c.mandatory).length,
+    confidence: criteria.length > 0 ? Math.round(criteria.reduce((a, c) => a + (c.confidence * 100 || 90), 0) / criteria.length) : 0
   };
 
-  if (loading && !tender) return <AdminLayout><div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={48}/></div></AdminLayout>;
-  if (!loading && !tender) return <AdminLayout><div className="flex flex-col items-center justify-center h-[60vh]"><AlertCircle size={40} className="text-slate-400 mb-4"/><h2 className="text-2xl font-bold">No Tender Data</h2><button onClick={() => navigate('/admin/upload')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl">Go to Upload</button></div></AdminLayout>;
+  if (isLoading) return <AdminLayout><div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={48}/></div></AdminLayout>;
+  if (!selectedTender && tenders.length === 0) return <AdminLayout><div className="flex flex-col items-center justify-center h-[60vh]"><AlertCircle size={40} className="text-slate-400 mb-4"/><h2 className="text-2xl font-bold">No Tender Data</h2><button onClick={() => navigate('/admin/upload')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl">Go to Upload</button></div></AdminLayout>;
 
   return (
     <AdminLayout>
       <div className="max-w-[1600px] mx-auto relative">
         <AnimatePresence>
-          {showSuccess && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-white/80 backdrop-blur-md">
-              <div className="flex flex-col items-center"><div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center text-green-600 mb-6"><CheckCircle2 size={40} /></div><h2 className="text-3xl font-black text-slate-900 tracking-tight">Analysis Confirmed</h2></div>
+          {toast && (
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} 
+              className={`fixed top-10 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl font-bold text-sm text-white flex items-center gap-3 ${toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+              {toast.type === 'error' ? <AlertCircle size={18}/> : <CheckCircle2 size={18}/>}
+              {toast.message}
             </motion.div>
           )}
         </AnimatePresence>
@@ -282,12 +388,37 @@ const CriteriaAnalysis = () => {
 
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest mb-2"><Target size={14} /><span>AI Extraction Engine v1.0</span></div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Criteria <span className="text-blue-600">Analysis</span></h1>
-            <p className="text-slate-500 mt-1 flex items-center gap-2"><FileText size={16} />{tender?.title || 'Document'}</p>
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-black text-slate-800 tracking-tight whitespace-nowrap">Criteria <span className="text-blue-600">Analysis</span></h1>
+              <div className="h-8 w-[1px] bg-slate-200 mx-2 hidden md:block"></div>
+              <div className="relative group w-full max-w-md">
+                <select 
+                  value={selectedTenderId || ''} 
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const t = tenders.find(tend => tend.id == id);
+                    setSelectedTenderId(id);
+                    setSelectedTender(t);
+                    fetchCriteria(id);
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer pr-10"
+                >
+                  <option value="" disabled>Select Tender Context...</option>
+                  {tenders.map(t => (
+                    <option key={t.id} value={t.id}>{t.title} (#{t.id})</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-blue-500 transition-colors" />
+              </div>
+            </div>
+            <p className="text-slate-500 mt-2 flex items-center gap-2"><FileText size={16} />{selectedTender?.title || 'No tender selected'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button onClick={handleAIExtract} disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-500 shadow-md transition-all active:scale-95 disabled:opacity-50">
+              {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>} Extract with AI
+            </button>
             <button onClick={fetchSummary} className="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-indigo-600 flex items-center gap-2 hover:bg-indigo-100"><Lightbulb size={16}/> AI Summary</button>
             <button onClick={() => handleExport('CSV')} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50"><Download size={16}/> CSV</button>
             <button onClick={() => handleExport('JSON')} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50"><FileJson size={16}/> JSON</button>
@@ -411,8 +542,8 @@ const CriteriaAnalysis = () => {
                        </motion.div>
                      )}
                    </AnimatePresence>
-                   {tender?.file_path ? (
-                     <iframe key={`pdf-${pdfPage}`} src={`${API_BASE_URL}/uploads/${tender.file_path.split('/').pop()}#page=${pdfPage}`} className="w-full h-[1000px] bg-white shadow-xl pointer-events-none" title="PDF" />
+                   {selectedTender?.file_path ? (
+                     <iframe key={`pdf-${pdfPage}`} src={`${API_BASE_URL}/uploads/${selectedTender.file_path.split('/').pop()}#page=${pdfPage}`} className="w-full h-[1000px] bg-white shadow-xl pointer-events-none" title="PDF" />
                    ) : (
                      <div className="w-full h-[1000px] bg-white shadow-xl p-12 text-slate-800 font-serif overflow-hidden relative">
                        <div className="absolute top-0 left-0 w-full h-8 bg-slate-100 border-b border-slate-200"></div>
@@ -463,7 +594,15 @@ const CriteriaAnalysis = () => {
                 ))}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setAddCriteriaModal(true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 hover:bg-slate-700 transition-colors"><Plus size={14}/> Add</button>
+                <button 
+                  onClick={() => {
+                    setNewCriteria(prev => ({...prev, tender_id: selectedTenderId || ''}));
+                    setAddCriteriaModal(true);
+                  }} 
+                  className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 hover:bg-slate-700 transition-colors"
+                >
+                  <Plus size={14}/> Add
+                </button>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search criteria..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-40 transition-all" />
@@ -492,7 +631,7 @@ const CriteriaAnalysis = () => {
                            <ChevronDown size={16} className={`text-slate-400 transition-transform ${expandedId === item.id ? 'rotate-180' : ''}`} />
                         </div>
                       </div>
-                      <h4 className="text-sm font-bold text-slate-800">{item.name}</h4>
+                      <h4 className="text-sm font-bold text-slate-800">{item.title}</h4>
                     </div>
                     
                     {/* Expanded Details */}
@@ -502,7 +641,7 @@ const CriteriaAnalysis = () => {
                           <div className="p-6 space-y-4">
                             <div>
                               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Extracted Logic & Value</p>
-                              <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200">{item.description || item.name}</p>
+                              <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200">{item.description || item.title}</p>
                             </div>
                             
                             {isLowConf && (
@@ -527,6 +666,7 @@ const CriteriaAnalysis = () => {
                                 <Lightbulb size={14} className="text-amber-500"/> AI Explanation
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); setEditCriteria(item); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-100 transition-colors" title="Edit Criteria"><Edit3 size={14}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteCriteria(item.id); }} className="px-4 py-2 bg-white border border-red-200 text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Delete Criteria"><Eraser size={14}/></button>
                             </div>
                           </div>
                         </motion.div>
@@ -581,7 +721,7 @@ const CriteriaAnalysis = () => {
                    <button onClick={() => setExplainModal(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                  </div>
                  <div className="p-6 space-y-4 text-sm text-slate-600">
-                   <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Criterion Identified</p><p className="font-bold text-slate-800">{explainModal.name}</p></div>
+                   <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Criterion Identified</p><p className="font-bold text-slate-800">{explainModal.title}</p></div>
                    
                    <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Extracted Value / Data Type</p>
                    <div className="flex gap-2 mt-1">
@@ -620,7 +760,7 @@ const CriteriaAnalysis = () => {
                  <div className="p-6 space-y-4">
                    <div>
                      <label className="text-xs font-bold text-slate-500 uppercase">Requirement Name / Extracted Value</label>
-                     <input type="text" value={editCriteria.name} onChange={e => setEditCriteria({...editCriteria, name: e.target.value})} className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                     <input type="text" value={editCriteria.title} onChange={e => setEditCriteria({...editCriteria, title: e.target.value})} className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
                    </div>
                    <div>
                      <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
@@ -628,10 +768,20 @@ const CriteriaAnalysis = () => {
                        <option>Financial</option><option>Technical</option><option>Compliance</option><option>Experience</option><option>General</option>
                      </select>
                    </div>
-                   <div className="flex items-center gap-2 mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                     <input type="checkbox" id="mandatoryEdit" checked={editCriteria.mandatory} onChange={e => setEditCriteria({...editCriteria, mandatory: e.target.checked})} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-                     <label htmlFor="mandatoryEdit" className="text-sm font-medium text-slate-700 cursor-pointer">Mark as Mandatory Requirement</label>
-                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Weightage (%)</label>
+                        <input type="number" value={editCriteria.weightage} onChange={e => setEditCriteria({...editCriteria, weightage: parseFloat(e.target.value) || 0})} className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Max Score</label>
+                        <input type="number" value={editCriteria.max_score} onChange={e => setEditCriteria({...editCriteria, max_score: parseFloat(e.target.value) || 0})} className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <input type="checkbox" id="mandatoryEdit" checked={editCriteria.mandatory} onChange={e => setEditCriteria({...editCriteria, mandatory: e.target.checked})} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
+                      <label htmlFor="mandatoryEdit" className="text-sm font-medium text-slate-700 cursor-pointer">Mark as Mandatory Requirement</label>
+                    </div>
                    <button onClick={handleSaveEdit} className="w-full py-2.5 mt-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-500 shadow-lg shadow-blue-200"><Save size={16}/> Save Corrections</button>
                  </div>
                </motion.div>
@@ -651,8 +801,17 @@ const CriteriaAnalysis = () => {
                  <div className="p-6 space-y-4">
                    <p className="text-xs text-slate-500">Manually append rules that the AI might have missed from external addendums.</p>
                    <div>
+                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tender Selection</label>
+                     <select value={newCriteria.tender_id} onChange={e => setNewCriteria({...newCriteria, tender_id: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none mb-4">
+                       <option value="">Select Tender Context...</option>
+                       {tenders.map(t => (
+                         <option key={t.id} value={t.id}>{t.title} (#{t.id})</option>
+                       ))}
+                     </select>
+                   </div>
+                   <div>
                      <label className="text-xs font-bold text-slate-500 uppercase">Requirement Description</label>
-                     <input type="text" placeholder="e.g. Bidder must provide Form 4B..." value={newCriteria.name} onChange={e => setNewCriteria({...newCriteria, name: e.target.value})} className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                     <input type="text" placeholder="e.g. Bidder must provide Form 4B..." value={newCriteria.title} onChange={e => setNewCriteria({...newCriteria, title: e.target.value})} className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
                    </div>
                    <div>
                      <label className="text-xs font-bold text-slate-500 uppercase">Classification</label>
@@ -660,11 +819,21 @@ const CriteriaAnalysis = () => {
                        <option>Financial</option><option>Technical</option><option>Compliance</option><option>Experience</option><option>General</option>
                      </select>
                    </div>
-                   <div className="flex items-center gap-2 mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                     <input type="checkbox" id="mandatoryAdd" checked={newCriteria.mandatory} onChange={e => setNewCriteria({...newCriteria, mandatory: e.target.checked})} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-                     <label htmlFor="mandatoryAdd" className="text-sm font-medium text-slate-700 cursor-pointer">Strictly Mandatory</label>
-                   </div>
-                   <button onClick={handleAddCriteria} disabled={!newCriteria.name.trim()} className="w-full py-2.5 mt-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 disabled:opacity-50"><Plus size={16}/> Add to Tender</button>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Weightage (%)</label>
+                        <input type="number" placeholder="e.g. 20" value={newCriteria.weightage} onChange={e => setNewCriteria({...newCriteria, weightage: parseFloat(e.target.value) || 0})} className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Max Score</label>
+                        <input type="number" placeholder="e.g. 100" value={newCriteria.max_score} onChange={e => setNewCriteria({...newCriteria, max_score: parseFloat(e.target.value) || 0})} className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <input type="checkbox" id="mandatoryAdd" checked={newCriteria.mandatory} onChange={e => setNewCriteria({...newCriteria, mandatory: e.target.checked})} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
+                      <label htmlFor="mandatoryAdd" className="text-sm font-medium text-slate-700 cursor-pointer">Strictly Mandatory</label>
+                    </div>
+                   <button onClick={handleAddCriteria} disabled={!newCriteria.title.trim() || !newCriteria.tender_id} className="w-full py-2.5 mt-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 disabled:opacity-50"><Plus size={16}/> Add to Tender</button>
                  </div>
                </motion.div>
             </div>

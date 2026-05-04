@@ -107,7 +107,11 @@ class FraudDetectionService:
                 
                 shared_docs = []
                 for d1 in docs1:
+                    if not d1.file_path:
+                        continue
                     for d2 in docs2:
+                        if not d2.file_path:
+                            continue
                         d1_name = os.path.basename(d1.file_path)
                         d2_name = os.path.basename(d2.file_path)
                         if (d1.file_hash and d1.file_hash == d2.file_hash) or (d1_name == d2_name):

@@ -1,0 +1,30 @@
+2026-05-04 21:38:47.416730: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'income', '', 'Technical', True, '', 0.9, 0.0, 87.0, datetime.datetime(2026, 5, 4, 16, 8, 46, 205136))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:39:18.955678: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 9, 17, 521821))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:39:22.130367: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 9, 20, 705660))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:39:37.899736: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 9, 36, 690943))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:39:49.982860: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 9, 48, 651607))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:40:47.021104: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 10, 45, 486311))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 21:40:50.070754: Error adding criterion: (pg8000.dbapi.ProgrammingError) {'S': 'ERROR', 'V': 'ERROR', 'C': '42703', 'M': 'column "weightage" of relation "criteria" does not exist', 'P': '94', 'F': 'parse_target.c', 'L': '1065', 'R': 'checkInsertTargets'}
+[SQL: INSERT INTO criteria (tender_id, title, description, category, mandatory, value, confidence, weightage, max_score, created_at) VALUES (%s::INTEGER, %s::VARCHAR, %s::VARCHAR, %s::VARCHAR, %s::BOOLEAN, %s::VARCHAR, %s::FLOAT, %s::FLOAT, %s::FLOAT, %s::TIMESTAMP WITHOUT TIME ZONE) RETURNING criteria.id]
+[parameters: (5, 'df', '', 'Technical', True, '', 0.9, 0.0, 100.0, datetime.datetime(2026, 5, 4, 16, 10, 48, 762365))]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2026-05-04 22:44:43.417193: SUCCESS: Extracted 4 new for Tender 7
+2026-05-04 22:45:12.685273: SUCCESS: Extracted 4 new for Tender 8

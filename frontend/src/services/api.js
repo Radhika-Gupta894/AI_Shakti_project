@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get API base URL from environment variable or default to localhost
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -120,11 +120,14 @@ export const apiService = {
   getSystemStatus: () => api.get('/system-status'),
   saveAnnotation: (data) => api.post('/save-annotation', data),
   highlightClause: (data) => api.post('/highlight-clause', data),
-  editCriteria: (data) => api.post('/edit-criteria', data),
-  
-  extractCriteria: (data) => api.post('/extract-criteria', data),
-  addCriteria: (data) => api.post('/add-criteria', data),
   getTenderSummary: () => api.get('/tender-summary'),
+
+  // Criteria Management
+  getCriteria: (tenderId) => api.get('/criteria', { params: { tender_id: tenderId } }),
+  addCriterion: (data) => api.post('/criteria/add', data),
+  updateCriterion: (id, data) => api.put(`/criteria/${id}`, data),
+  deleteCriterion: (id) => api.delete(`/criteria/${id}`),
+  extractCriteria: (tenderId) => api.post('/criteria/extract', { tender_id: tenderId }),
 };
 
 export default api;

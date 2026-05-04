@@ -39,3 +39,5 @@ Desktop.ini
 # Project Specific
 backend/uploads/
 backend/scratch/
+
+*.env

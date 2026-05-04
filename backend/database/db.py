@@ -1,9 +1,11 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
-from pathlib import Path
 import os
 import logging
+import traceback
+from pathlib import Path
+from sqlalchemy.engine import make_url
 
 # -----------------------------------
 # Logging Configuration
@@ -26,48 +28,57 @@ logger.info(f"📄 Loading .env from: {env_path}")
 # -----------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not DATABASE_URL:
-    logger.error("❌ DATABASE_URL not found in environment variables!")
-    raise ValueError("DATABASE_URL environment variable is not set.")
+USE_SQLITE = False
 
-# For pure-python pg8000 driver (no C++ build tools required)
-if DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+pg8000://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
-    # Strip any legacy sslmode from the URL as we use connect_args
-    if "?" in DATABASE_URL or "&" in DATABASE_URL:
+if not DATABASE_URL:
+    logger.warning("⚠️ DATABASE_URL not found — falling back to local SQLite database.")
+    SQLITE_PATH = BASE_DIR / "shakti_ai.db"
+    DATABASE_URL = f"sqlite:///{SQLITE_PATH}"
+    USE_SQLITE = True
+else:
+    # 1. Ensure postgresql+pg8000 prefix
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
+    
+    # 2. Strip legacy ssl parameters to avoid conflicts
+    if "?" in DATABASE_URL:
         import re
-        # Remove sslmode and any empty query params
-        DATABASE_URL = re.sub(r'([?&])sslmode=[^&]*&?', r'\1', DATABASE_URL)
+        DATABASE_URL = re.sub(r'([?&])(ssl|sslmode)=[^&]*&?', r'\1', DATABASE_URL)
         DATABASE_URL = DATABASE_URL.rstrip('?&')
-    logger.info("⚡ Using pure-python pg8000 driver for cloud connection")
+    
+    # 3. Robust Password Handling for pg8000 (Requirement #5)
+    try:
+        url_obj = make_url(DATABASE_URL)
+        if "pg8000" in url_obj.drivername and url_obj.password is None:
+            # Reconstruct URL with empty string password to satisfy pg8000's internal decode call
+            DATABASE_URL = str(url_obj._replace(password=""))
+            logger.info("ℹ️ Injected safe password placeholder for pg8000")
+    except Exception as e:
+        logger.warning(f"⚠️ URL parsing notice: {e}")
 
 # Hide password in logs for security
-safe_db_url = DATABASE_URL.split("@")[-1]
-
-logger.info(f"🔌 Connecting to database: {safe_db_url}")
+safe_db_url = DATABASE_URL.split("@")[-1] if "@" in DATABASE_URL else DATABASE_URL
+logger.info(f"🔌 Database Target: {safe_db_url}")
 
 # -----------------------------------
 # Create SQLAlchemy Engine
 # -----------------------------------
-# For Cloud DBs (Neon/Supabase), we need SSL and pooling
-# Using pg8000 (pure-python) to avoid C++ build tool requirements
-
 from sqlalchemy import event
 
 def get_engine_args():
+    if USE_SQLITE:
+        return {"connect_args": {"check_same_thread": False}, "echo": False}
+
     args = {
-        "pool_size": 10, # Increased for production-ready concurrency
-        "max_overflow": 20, # Allow more connections during bursts
-        "pool_timeout": 30, # Longer wait before timing out
+        "pool_size": 15,
+        "max_overflow": 25,
+        "pool_timeout": 60,
         "pool_recycle": 1800,
         "pool_pre_ping": True,
         "echo": False,
     }
     
-    # Connection arguments
-    connect_args = {
-        "timeout": 10, # Socket timeout
-    }
+    connect_args = {"timeout": 15}
     
     if "pg8000" in DATABASE_URL:
         import ssl
@@ -75,23 +86,16 @@ def get_engine_args():
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         connect_args["ssl_context"] = ssl_context
-        logger.info("🔒 Configured SSL for pg8000")
+        # Ensure password is explicitly a string, not None
+        connect_args["password"] = make_url(DATABASE_URL).password or ""
+        logger.info("🔒 Configured SSL & Password Safety for pg8000")
     else:
         connect_args["sslmode"] = "require"
         
     args["connect_args"] = connect_args
     return args
 
-# Update URL for pg8000 driver prefix if missing
-if DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+pg8000://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
-
-# Strip any legacy ssl parameters from URL to avoid conflicts
-if "?" in DATABASE_URL or "&" in DATABASE_URL:
-    import re
-    DATABASE_URL = re.sub(r'([?&])(ssl|sslmode)=[^&]*&?', r'\1', DATABASE_URL)
-    DATABASE_URL = DATABASE_URL.rstrip('?&')
-
+# The engine is created with the processed DATABASE_URL
 engine = create_engine(DATABASE_URL, **get_engine_args())
 
 # Set statement timeout on every connection
