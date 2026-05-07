@@ -122,7 +122,7 @@ const Header = ({ toggle }) => {
     // Fetch real tenders to create dynamic notifications
     const fetchLatestAlerts = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/tenders');
+        const response = await fetch('http://127.0.0.1:8000/api/tenders');
         const tenders = await response.json();
         
         // Transform all tenders into notifications

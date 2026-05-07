@@ -6,19 +6,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
 
+import { useNavigate } from 'react-router-dom';
+
 const TenderUpload = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
-  const { request: uploadTender, loading, progress, error, data } = useApi(apiService.uploadTender);
+  const { request: uploadTender, loading, progress, error } = useApi(apiService.uploadTender);
   const [step, setStep] = useState(1); // 1: Upload, 2: Processing, 3: Success
 
   const handleUpload = async () => {
     if (!file) return;
     setStep(2);
     try {
-      await uploadTender(file);
-      setStep(3);
+      const res = await uploadTender(file);
+      if (res.data.success && res.data.tender) {
+         setStep(3);
+         // Redirect after a short delay so they see the success state
+         setTimeout(() => {
+           navigate(`/admin/criteria?id=${res.data.tender.id}`);
+         }, 1500);
+      }
     } catch (err) {
-      setStep(1); // Go back to upload on error
+      setStep(1); 
     }
   };
 

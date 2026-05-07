@@ -8,5 +8,6 @@ from .fraud_alert import FraudAlert
 from .manual_review import ManualReview
 from .clarification import ClarificationRequest
 from .criterion import Criterion
+from .tender_required_document import TenderRequiredDocument
 
 # This allows Base.metadata.create_all to find all models

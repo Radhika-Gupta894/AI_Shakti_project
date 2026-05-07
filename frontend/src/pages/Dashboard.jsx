@@ -233,6 +233,10 @@ const Dashboard = () => {
           <button onClick={() => setShowAI(true)} className="px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2">
             <MessageSquare size={16} /> Ask AI
           </button>
+          
+          <Link to="/bidder/dashboard" className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
+            <Eye size={16} /> View Bidder Portal
+          </Link>
         </div>
       </div>
 

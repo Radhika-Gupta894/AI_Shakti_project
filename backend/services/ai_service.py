@@ -1,8 +1,8 @@
 import os
 import json
-import google.generativeai as genai
-from typing import Dict, Any
 import logging
+from typing import List, Dict, Any
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,63 @@ class AIService:
             self._initialized = True
             logger.info("✅ AI Service Initialized.")
 
+    async def extract_tender_criteria_visual(self, image_parts: list, text_context: str = "") -> Dict[str, Any]:
+        """
+        DUAL-PATH EXTRACTION: Analyzes both visual images and digital text context for max accuracy.
+        """
+        self._ensure_initialized()
+        
+        if not image_parts and not text_context:
+            return {"error": "No context provided"}
+
+        prompt = f"""
+        [ROLE: ELITE PROCUREMENT AUDITOR & INTELLIGENCE AGENT]
+        [TASK: DYNAMIC EXTRACTION OF TENDER ELIGIBILITY MATRIX]
+        
+        ANALYSIS CONTEXT:
+        {text_context[:10000]}
+        
+        REQUIRED INTELLIGENCE:
+        1. STATUTORY COMPLIANCE: Find all registrations needed (GST, PAN, EPF, ESI, MSME, COI).
+        2. FINANCIAL CAPACITY: Extract specific Turnover (last 3 yrs), Net Worth, and Solvency.
+        3. TECHNICAL BENCHMARK: Identify 'Similar Works' experience and necessary certifications (ISO, etc.).
+        4. FORMS & ANNEXURES: List every specific Annexure or Form mentioned (Annexure 1, 2, 3, etc.).
+        
+        EXTRACTION RULES:
+        - Identify MANDATORY (Shall/Must/Strictly) vs OPTIONAL requirements.
+        - Capture EXACT THRESHOLDS (e.g., "50% of the Estimated Cost").
+        - Group results logically by category.
+        
+        OUTPUT FORMAT (JSON ONLY):
+        {{
+            "technical_criteria": [{{ "name": "...", "description": "...", "mandatory": true, "confidence": 0.98 }}],
+            "financial_criteria": [{{ "name": "...", "description": "...", "mandatory": true, "confidence": 0.98 }}],
+            "compliance_criteria": [{{ "name": "...", "description": "...", "mandatory": true, "confidence": 0.98 }}]
+        }}
+        """
+        
+        try:
+            # Combine prompt and images
+            content = [prompt] + image_parts
+            response = await self.model.generate_content_async(content)
+            
+            res_text = response.text
+            logger.info(f"🔮 AI RAW RESPONSE (First 200 chars): {res_text[:200]}")
+            print(f"DEBUG: RAW AI RESPONSE TEXT: {res_text[:500]}...")
+            
+            if "```json" in res_text:
+                res_text = res_text.split("```json")[1].split("```")[0]
+            elif "```" in res_text:
+                res_text = res_text.split("```")[1].split("```")[0]
+                
+            parsed = json.loads(res_text.strip())
+            print(f"DEBUG: PARSED AI DATA COUNT: Tech:{len(parsed.get('technical_criteria', []))} Fin:{len(parsed.get('financial_criteria', []))} Comp:{len(parsed.get('compliance_criteria', []))}")
+            return parsed
+        except Exception as e:
+            print(f"DEBUG: AI SERVICE ERROR: {e}")
+            logger.error(f"Visual AI Extraction Error: {e}")
+            return {"error": str(e), "technical_criteria": [], "financial_criteria": [], "compliance_criteria": []}
+
     async def extract_tender_criteria(self, text: str) -> Dict[str, Any]:
         self._ensure_initialized()
         """
@@ -53,9 +110,9 @@ class AIService:
         Rules:
         1. Only return valid JSON.
         2. Categorize requirements into 'technical', 'financial', and 'compliance'.
-        3. For 'financial', look for turnover, liquid assets, and bank guarantees.
-        4. For 'technical', look for past experience, project completions, and machinery.
-        5. For 'compliance', look for GST, ISO, MSME, blacklisting, and local registration.
+        3. For every requirement found, explicitly determine the DOCUMENT name the bidder must upload (e.g., 'GST Certificate', 'ISO Certification', 'Annual Audit Report').
+        4. If a threshold is mentioned (e.g., '50 Cr Turnover'), include that in the description.
+        5. Use clear, concise titles for the documents.
         
         JSON Structure:
         {{
@@ -80,7 +137,7 @@ class AIService:
         """
         
         try:
-            response = self.model.generate_content(prompt)
+            response = await self.model.generate_content_async(prompt)
             content = response.text
             # Clean possible markdown formatting from response
             if "```json" in content:
@@ -157,7 +214,7 @@ class AIService:
         """
         
         try:
-            response = self.model.generate_content(prompt)
+            response = await self.model.generate_content_async(prompt)
             content = response.text
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
@@ -201,7 +258,7 @@ class AIService:
         }}
         """
         try:
-            response = self.model.generate_content(prompt)
+            response = await self.model.generate_content_async(prompt)
             content = response.text
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]

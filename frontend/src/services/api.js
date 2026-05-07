@@ -120,14 +120,29 @@ export const apiService = {
   getSystemStatus: () => api.get('/system-status'),
   saveAnnotation: (data) => api.post('/save-annotation', data),
   highlightClause: (data) => api.post('/highlight-clause', data),
-  getTenderSummary: () => api.get('/tender-summary'),
 
   // Criteria Management
   getCriteria: (tenderId) => api.get('/criteria', { params: { tender_id: tenderId } }),
   addCriterion: (data) => api.post('/criteria/add', data),
   updateCriterion: (id, data) => api.put(`/criteria/${id}`, data),
   deleteCriterion: (id) => api.delete(`/criteria/${id}`),
-  extractCriteria: (tenderId) => api.post('/criteria/extract', { tender_id: tenderId }),
+
+  // AI Services
+  extractCriteria: (tenderId) => api.post(`/extract-criteria/${tenderId}`),
+  getTenderSummary: (tenderId) => api.get(`/tenders/${tenderId}/summarize`),
+  askAI: (question, tenderId) => api.post('/ask-ai', { question, tender_id: tenderId }),
+
+  // Required Documents — Admin → Bidder Sync
+  getRequiredDocuments: (tenderId) =>
+    api.get(`/tenders/${tenderId}/required-documents`),
+  generateRequiredDocuments: (tenderId) =>
+    api.post(`/tenders/${tenderId}/generate-required-documents`),
+  addRequiredDocument: (tenderId, data) =>
+    api.post(`/tenders/${tenderId}/required-documents`, data),
+  deleteRequiredDocument: (docId) =>
+    api.delete(`/required-documents/${docId}`),
+  getBidderUploadedDocuments: (bidderId, tenderId) =>
+    api.get(`/bidders/${bidderId}/uploaded-documents`, { params: { tender_id: tenderId } }),
 };
 
 export default api;
