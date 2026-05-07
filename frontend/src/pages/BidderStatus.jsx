@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import BidderLayout from '../layouts/BidderLayout';
-import { 
-  Clock, CheckCircle, AlertCircle, FileText, Download, ShieldCheck, 
-  TrendingUp, History, UploadCloud, Search, CheckCircle2, 
+import {
+  Clock, CheckCircle, AlertCircle, FileText, Download, ShieldCheck,
+  TrendingUp, History, UploadCloud, Search, CheckCircle2,
   AlertTriangle, Loader2, MessageSquare, Activity, X, Eye, FileJson, Paperclip, Send, Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -39,11 +39,10 @@ const ProgressStep = ({ step, title, status }) => {
 
   return (
     <div className="flex flex-col items-center flex-1 relative group z-10">
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm z-10 transition-all shadow-sm ${
-        isCompleted ? 'bg-emerald-500 text-white shadow-emerald-200' :
-        isCurrent ? 'bg-blue-600 text-white shadow-blue-200 ring-4 ring-blue-100' :
-        'bg-slate-100 text-slate-400 border border-slate-200'
-      }`}>
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm z-10 transition-all shadow-sm ${isCompleted ? 'bg-emerald-500 text-white shadow-emerald-200' :
+          isCurrent ? 'bg-blue-600 text-white shadow-blue-200 ring-4 ring-blue-100' :
+            'bg-slate-100 text-slate-400 border border-slate-200'
+        }`}>
         {isCompleted ? <CheckCircle size={18} /> : step}
       </div>
       <div className="mt-4 text-center">
@@ -60,7 +59,7 @@ const BidderStatus = () => {
   const location = useLocation();
   const navigate = useNavigate();
   // Define active tab
-  const [activeTab, setActiveTab] = useState('overview'); 
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Sync tab with URL path
   useEffect(() => {
@@ -75,48 +74,162 @@ const BidderStatus = () => {
   const BIDDER_ID = 1; // Assuming logged in user ID is 1 for now
   const { request: fetchMySubmissions, loading: subLoading, data: submissions } = useApi(apiService.getMySubmissions);
   const { request: fetchTenders, loading: tendersLoading, data: tenders } = useApi(apiService.getTenders);
-  
+
   const [isUploading, setIsUploading] = useState(false);
   const [selectedPdf, setSelectedPdf] = useState(null); // For PDF Source Mapping Modal
-  
+
   // Criteria States
   const [showCriteriaModal, setShowCriteriaModal] = useState(false);
   const [activeCriteriaTender, setActiveCriteriaTender] = useState(null);
   const [tenderCriteria, setTenderCriteria] = useState([]);
   const [criteriaLoading, setCriteriaLoading] = useState(false);
-  
+
+  // Dynamic Documents State
+  const [activeApplication, setActiveApplication] = useState(null);
+  const [requiredDocs, setRequiredDocs] = useState([]);
+  const [uploadedDocs, setUploadedDocs] = useState([]);
+  const [evalReport, setEvalReport] = useState(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [complianceScore, setComplianceScore] = useState(0);
+
+  const fetchApplicationDocs = useCallback(async (tenderId) => {
+    console.log("📂 Fetching docs for Tender:", tenderId);
+    setDocsLoading(true);
+    try {
+      const [reqRes, upRes] = await Promise.all([
+        apiService.getRequiredDocuments(tenderId),
+        apiService.getBidderUploadedDocuments(BIDDER_ID, tenderId)
+      ]);
+
+      console.log("📋 Required Docs Response:", reqRes.data);
+      console.log("📤 Uploaded Docs Response:", upRes.data);
+
+      const reqs = reqRes.data?.data || [];
+      const ups = upRes.data?.data || [];
+
+      setRequiredDocs(reqs);
+      setUploadedDocs(ups);
+
+      // Fetch AI evaluation report for this application
+      try {
+        const subRes = await apiService.getMySubmissions(BIDDER_ID);
+        const submissions = subRes.data || subRes; // Handle both Axios and useApi results
+        console.log("📊 Submissions for Evaluation:", submissions);
+        
+        const mySub = Array.isArray(submissions) ? submissions.find(s => Number(s.tender_id) === Number(tenderId)) : null;
+        
+        if (mySub) {
+          console.log("🎯 Found Submission for Report:", mySub.id);
+          const reportRes = await apiService.getEvaluationReport(mySub.id);
+          console.log("📝 Evaluation Report:", reportRes.data);
+          setEvalReport(reportRes.data);
+        } else {
+          console.warn("❓ No submission record found for tender", tenderId);
+          setEvalReport(null);
+        }
+      } catch (e) {
+        console.warn("⚠️ Evaluation report not available yet", e);
+        setEvalReport(null);
+      }
+
+      // Calculate score
+      if (reqs.length > 0) {
+        const mandatoryReqs = reqs.filter(r => r.mandatory);
+        const uploadedMandatory = mandatoryReqs.filter(r =>
+          ups.some(u => u.document_type === r.document_name)
+        );
+        const score = Math.round((uploadedMandatory.length / (mandatoryReqs.length || 1)) * 100);
+        setComplianceScore(score);
+      } else {
+        setComplianceScore(0);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch docs", err);
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [BIDDER_ID]);
+
   const fetchAll = useCallback(async () => {
     try {
-      await Promise.allSettled([
-        fetchMySubmissions(BIDDER_ID),
-        fetchTenders()
-      ]);
-    } catch(err) { console.error(err); }
-  }, [fetchMySubmissions, fetchTenders]);
+      console.log("📡 Initializing Bidder Workspace for ID:", BIDDER_ID);
+      const submissionsData = await fetchMySubmissions(BIDDER_ID);
+      await fetchTenders();
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+      console.log("📝 All My Submissions:", submissionsData);
+
+      // Auto-load docs for the latest submission if no active selection
+      if (submissionsData && submissionsData.length > 0 && !activeApplication) {
+        const latest = submissionsData[submissionsData.length - 1];
+        const tenderId = latest.tender_id; // CRITICAL: Use tender_id, NOT id (id is the evaluation id)
+        console.log("🆕 Auto-selecting latest application:", tenderId);
+        
+        if (tenderId) {
+          setActiveApplication({ 
+            id: tenderId, 
+            evalId: latest.id,
+            title: latest.tender_title || "My Application" 
+          });
+          fetchApplicationDocs(tenderId);
+        }
+      }
+    } catch (err) { console.error("❌ Initial fetch failed", err); }
+  }, [BIDDER_ID, fetchMySubmissions, fetchTenders, activeApplication, fetchApplicationDocs]);
+
+  useEffect(() => { fetchAll(); }, [BIDDER_ID]); // Depend on BIDDER_ID to re-run if it changes
 
   // Derived Data
   const latestSub = submissions?.[submissions.length - 1];
   const status = latestSub?.status || 'SUBMITTED';
-  const score = latestSub?.ai_score || 0;
+  const score_value = latestSub?.ai_score || 0;
   const isRejected = status === 'FAIL' || status === 'Rejected';
-  
+
   // Handlers
-  const handleFileUpload = async (e, type) => {
+  const handleFileUpload = async (e, docRequirement) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !activeApplication) return;
+
     setIsUploading(true);
-    // Simulating API upload delay
-    setTimeout(() => {
-      alert(`${type} uploaded successfully! Engine is OCR processing...`);
+    try {
+      await apiService.uploadBidderDocument(
+        BIDDER_ID,
+        activeApplication.id,
+        docRequirement.document_name,
+        file
+      );
+      // Refresh documents after upload
+      fetchApplicationDocs(activeApplication.id);
+    } catch (err) {
+      console.error("Upload failed", err);
+      alert("Failed to upload document. Please try again.");
+    } finally {
       setIsUploading(false);
-      fetchAll();
-    }, 1500);
+    }
+  };
+
+
+
+  const handleApply = (tender) => {
+    setActiveApplication(tender);
+    setActiveTab('track');
+    fetchApplicationDocs(tender.id);
   };
 
   const handleDownloadReport = () => {
     alert("Generating AI Evaluation PDF Report...");
+  };
+
+  const handleDeepSync = async (tenderId) => {
+    if (!tenderId) return;
+    setIsUploading(true);
+    try {
+      await apiService.generateRequiredDocuments(tenderId);
+      await fetchApplicationDocs(tenderId);
+    } catch (err) {
+      console.error("Sync failed", err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const viewTenderCriteria = async (tender) => {
@@ -146,38 +259,11 @@ const BidderStatus = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard title="Active Tenders" value={tenders?.length || 0} sub="Available Opportunities" icon={Search} color="indigo" loading={tendersLoading} />
             <StatCard title="My Submissions" value={submissions?.length || 0} sub="Total Lifetime Bids" icon={FileText} color="blue" loading={subLoading} />
-            <StatCard title="Compliance Score" value={latestSub ? `${score}%` : 'N/A'} sub="Latest Evaluation" icon={ShieldCheck} color="emerald" loading={subLoading} />
+            <StatCard title="Compliance Score" value={latestSub ? `${score_value}%` : 'N/A'} sub="Latest Evaluation" icon={ShieldCheck} color="emerald" loading={subLoading} />
             <StatCard title="Clarifications" value={isRejected ? 1 : 0} sub="Pending Action" icon={AlertCircle} color="amber" loading={subLoading} />
           </div>
 
-          {/* AI Recommendation Panel */}
-          <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-[32px] p-8 text-white relative overflow-hidden shadow-xl">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 blur-3xl rounded-full -mr-20 -mt-20" />
-             <div className="relative z-10">
-               <h3 className="text-xl font-black mb-2 flex items-center gap-2">
-                 <Activity size={24} className="text-blue-400" />
-                 SHAKTI AI Recommendations
-               </h3>
-               <p className="text-sm text-blue-200 mb-6 max-w-2xl">Based on your previous submissions and market trends, our AI has identified the following action items to increase your win probability.</p>
-               <div className="grid md:grid-cols-3 gap-4">
-                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 hover:bg-white/20 transition-all">
-                   <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mb-3"><AlertTriangle size={16}/></div>
-                   <h4 className="text-sm font-bold mb-1">ISO Renewal Approaching</h4>
-                   <p className="text-[10px] text-slate-300">Your ISO 9001 certificate expires in 45 days. Upload a renewed version to maintain 100% technical compliance.</p>
-                 </div>
-                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 hover:bg-white/20 transition-all">
-                   <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-3"><TrendingUp size={16}/></div>
-                   <h4 className="text-sm font-bold mb-1">High Match: CRPF IT Hardware</h4>
-                   <p className="text-[10px] text-slate-300">You have an 89% historic match rate for IT Hardware tenders. A new tender was just released.</p>
-                 </div>
-                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 hover:bg-white/20 transition-all">
-                   <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mb-3"><FileText size={16}/></div>
-                   <h4 className="text-sm font-bold mb-1">Draft Saved</h4>
-                   <p className="text-[10px] text-slate-300">You have a draft application for Tender #4092. Complete your financial document upload to submit.</p>
-                 </div>
-               </div>
-             </div>
-          </div>
+
 
           {/* Available Tenders Module */}
           <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -206,8 +292,11 @@ const BidderStatus = () => {
                       <tr key={t.id || idx} className="hover:bg-slate-50 transition-colors border-b border-slate-50">
                         <td className="py-4 pl-8">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={16}/></div>
-                            <span className="text-sm font-bold text-slate-800">{t.title}</span>
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={16} /></div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-slate-800">{t.title}</span>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase">ID: {t.id}</span>
+                            </div>
                           </div>
                         </td>
                         <td className="py-4">
@@ -219,9 +308,12 @@ const BidderStatus = () => {
                         <td className="py-4 pr-8 text-right">
                           <div className="flex justify-end gap-2">
                             <button onClick={() => viewTenderCriteria(t)} className="px-4 py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all flex items-center gap-1.5">
-                              <Target size={14}/> Criteria
+                              <Target size={14} /> Criteria
                             </button>
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm shadow-blue-200 transition-all">
+                            <button
+                              onClick={() => handleApply(t)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm shadow-blue-200 transition-all"
+                            >
                               Apply Now
                             </button>
                           </div>
@@ -284,7 +376,9 @@ const BidderStatus = () => {
                         <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                           <ShieldCheck size={20} className="text-blue-600" /> AI Document Evaluation Center
                         </h3>
-                        <p className="text-xs font-bold text-slate-400 mt-1">Real-time OCR extraction and compliance mapping.</p>
+                        <p className="text-xs font-bold text-slate-400 mt-1">
+                          {activeApplication ? `Requirements for: ${activeApplication.title} (ID: ${activeApplication.id})` : "Real-time OCR extraction and compliance mapping."}
+                        </p>
                       </div>
                       <button onClick={handleDownloadReport} className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 flex items-center gap-2 transition-all">
                         <Download size={14} /> AI Report
@@ -292,88 +386,134 @@ const BidderStatus = () => {
                     </div>
 
                     <div className="space-y-4">
-                      {/* Document Row 1 */}
-                      <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 group">
-                        <div className="flex gap-4 items-center">
-                          <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle2 size={20} /></div>
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800">Financial Turnover</h4>
-                            <p className="text-xs text-slate-500 font-medium">Verified &gt; ₹5 Crores for 3 consecutive years.</p>
-                          </div>
+                      {docsLoading ? (
+                        <div className="py-20 text-center">
+                          <Loader2 className="animate-spin inline text-blue-500 mb-4" size={40} />
+                          <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Syncing with Intelligence Matrix...</p>
                         </div>
-                        <div className="flex items-center gap-4 mt-4 md:mt-0">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-white px-2 py-1 rounded text-emerald-600 border border-emerald-100 shadow-sm">PASS</span>
-                          <button onClick={() => openPdfSource('financial')} className="px-3 py-1.5 bg-white text-blue-600 font-bold text-[10px] uppercase tracking-widest rounded-lg border border-blue-100 hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                            <Eye size={12}/> View Source
-                          </button>
-                        </div>
-                      </div>
+                      ) : requiredDocs.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-4">
 
-                      {/* Document Row 2 */}
-                      <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 group">
-                        <div className="flex gap-4 items-center">
-                          <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle2 size={20} /></div>
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800">GST Registration</h4>
-                            <p className="text-xs text-slate-500 font-medium">GSTIN Validated. Active status.</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 mt-4 md:mt-0">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-white px-2 py-1 rounded text-emerald-600 border border-emerald-100 shadow-sm">PASS</span>
-                          <button onClick={() => openPdfSource('gst')} className="px-3 py-1.5 bg-white text-blue-600 font-bold text-[10px] uppercase tracking-widest rounded-lg border border-blue-100 hover:bg-blue-50 transition-colors shadow-sm flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                            <Eye size={12}/> View Source
-                          </button>
-                        </div>
-                      </div>
 
-                      {/* Document Row 3 - Warning/Upload */}
-                      <div className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-2xl border transition-all ${isRejected ? 'bg-red-50/50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                        <div className="flex gap-4 items-center">
-                          <div className={`p-3 rounded-xl ${isRejected ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-400'}`}>
-                            {isRejected ? <AlertTriangle size={20} /> : <Loader2 className="animate-spin" size={20} />}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800">ISO 9001:2015 Certificate</h4>
-                            <p className={`text-xs font-medium ${isRejected ? 'text-red-600' : 'text-slate-500'}`}>
-                              {isRejected ? "Certificate expired. Requires updated document." : "Awaiting document upload."}
-                            </p>
-                          </div>
+                          {requiredDocs.map((doc, idx) => {
+                            const isUploaded = uploadedDocs.some(u => u.document_type === doc.document_name);
+                            const conf = doc.confidence || 0.95;
+                            
+                            return (
+                              <motion.div 
+                                key={doc.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.05 }}
+                                className={`group bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl p-5 transition-all relative overflow-hidden ${isUploaded ? 'border-emerald-200' : ''}`}
+                              >
+                                {isUploaded && <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">Verified</div>}
+                                
+                                <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+                                  <div className={`p-4 rounded-xl flex-none ${isUploaded ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
+                                    {isUploaded ? <FileCheck size={24} /> : <FileText size={24} />}
+                                  </div>
+                                  
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <h4 className="text-lg font-black text-slate-800">{doc.document_name}</h4>
+                                      {doc.mandatory && (
+                                        <span className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase tracking-widest bg-red-50 px-2 py-0.5 rounded-md border border-red-100">
+                                          <AlertTriangle size={10} /> Critical
+                                        </span>
+                                      )}
+                                      
+                                      {/* AI EVALUATION STATUS BADGE */}
+                                      {isUploaded && evalReport && (
+                                        (() => {
+                                          const result = evalReport.results?.find(r => 
+                                            r.criterion_name.toLowerCase().includes(doc.document_name.toLowerCase()) ||
+                                            doc.document_name.toLowerCase().includes(r.criterion_name.toLowerCase())
+                                          );
+                                          if (!result) return null;
+                                          
+                                          const isPass = result.status === 'PASS';
+                                          const isFail = result.status === 'FAIL';
+                                          
+                                          return (
+                                            <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${
+                                              isPass ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                                              isFail ? 'bg-red-50 text-red-600 border-red-100' : 
+                                              'bg-amber-50 text-amber-600 border-amber-100'
+                                            }`}>
+                                              {result.status}
+                                            </span>
+                                          );
+                                        })()
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-xl">
+                                      {(() => {
+                                        if (!isUploaded) return doc.description || "Required for technical qualification.";
+                                        
+                                        const result = evalReport?.results?.find(r => 
+                                          r.criterion_name.toLowerCase().includes(doc.document_name.toLowerCase()) ||
+                                          doc.document_name.toLowerCase().includes(r.criterion_name.toLowerCase())
+                                        );
+                                        
+                                        if (result) return result.reasoning;
+                                        return "Extraction complete. Document successfully linked to criteria.";
+                                      })()}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-6 w-full lg:w-auto lg:pl-6 lg:border-l border-slate-100">
+                                    <div className="flex-1 lg:w-32">
+                                      <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Weight</span>
+                                        <span className="text-xs font-black text-slate-800">{doc.weightage || 10}%</span>
+                                      </div>
+                                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500" style={{ width: `${doc.weightage || 10}%` }} />
+                                      </div>
+                                    </div>
+
+                                    <div className="relative">
+                                      {isUploaded ? (
+                                        <button className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="View Source"><Eye size={20} /></button>
+                                      ) : (
+                                        <>
+                                          <input type="file" onChange={(e) => handleFileUpload(e, doc)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept=".pdf,.png,.jpg" disabled={isUploading} />
+                                          <button disabled={isUploading} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/10">
+                                            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                                            Upload
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
                         </div>
-                        <div className="flex items-center gap-4 mt-4 md:mt-0 relative">
-                          <input type="file" onChange={(e) => handleFileUpload(e, 'ISO Certificate')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".pdf,.png,.jpg" disabled={isUploading} />
-                          <button disabled={isUploading} className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all ${isRejected ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-200' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/10'}`}>
-                            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                            {isUploading ? "Uploading..." : "Upload File"}
-                          </button>
+                      ) : (
+                        <div className="text-center py-20 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
+                           <FileJson size={48} className="mx-auto text-slate-200 mb-4" />
+                           <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No Extraction Required</p>
+                           <p className="text-slate-400 text-xs mt-1 mb-6">AI has not flagged any custom documents for this tender yet.</p>
+                           <button 
+                             onClick={() => handleDeepSync(activeApplication?.id)}
+                             disabled={isUploading}
+                             className="px-6 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-2 mx-auto"
+                           >
+                             {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
+                             Deep Intelligence Sync
+                           </button>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Sidebar Info Panels */}
                 <div className="lg:col-span-4 space-y-6">
-                  {/* Dynamic Compliance Score */}
-                  <div className="bg-slate-900 rounded-[32px] p-8 text-white relative overflow-hidden shadow-xl">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -mr-16 -mt-16" />
-                    <h3 className="font-bold mb-4 flex items-center gap-2 text-emerald-400">
-                      <TrendingUp size={18} /> Compliance Score
-                    </h3>
-                    <div className="flex items-center justify-center h-40 relative">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={[{ value: score }, { value: 100 - score }]} cx="50%" cy="50%" innerRadius={60} outerRadius={70} startAngle={90} endAngle={-270} dataKey="value" stroke="none">
-                            <Cell fill="#10b981" />
-                            <Cell fill="rgba(255,255,255,0.1)" />
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-black">{score}%</span>
-                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Match</span>
-                      </div>
-                    </div>
-                  </div>
+
 
                   {/* Clarification Request System */}
                   {isRejected && (
@@ -402,29 +542,29 @@ const BidderStatus = () => {
       return (
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px] animate-in fade-in zoom-in-95 duration-300">
           <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-             <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2">
-               <MessageSquare size={18} className="text-blue-600" /> Clarification Center
-             </h3>
-             <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full">Action Required</span>
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2">
+              <MessageSquare size={18} className="text-blue-600" /> Clarification Center
+            </h3>
+            <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full">Action Required</span>
           </div>
           <div className="flex-1 p-6 overflow-y-auto bg-slate-50 space-y-6">
             <div className="flex justify-start">
-               <div className="max-w-[80%]">
-                 <div className="flex items-center gap-2 mb-1">
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Procurement Officer</span>
-                   <span className="text-[9px] text-slate-400">10:45 AM</span>
-                 </div>
-                 <div className="bg-white p-4 rounded-2xl rounded-tl-sm border border-slate-200 shadow-sm text-sm text-slate-700">
-                   The provided ISO certificate appears to have expired last month. Please upload the renewed certificate for FY26 to proceed.
-                 </div>
-               </div>
+              <div className="max-w-[80%]">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Procurement Officer</span>
+                  <span className="text-[9px] text-slate-400">10:45 AM</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl rounded-tl-sm border border-slate-200 shadow-sm text-sm text-slate-700">
+                  The provided ISO certificate appears to have expired last month. Please upload the renewed certificate for FY26 to proceed.
+                </div>
+              </div>
             </div>
           </div>
           <div className="p-4 bg-white border-t border-slate-100 flex gap-2 items-center">
             <button className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"><Paperclip size={18} /></button>
             <input type="text" placeholder="Type your reply or attach a document..." className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-400 transition-all" />
             <button className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 shadow-sm transition-all flex items-center gap-2">
-              Send <Send size={14}/>
+              Send <Send size={14} />
             </button>
           </div>
         </div>
@@ -435,7 +575,7 @@ const BidderStatus = () => {
   return (
     <BidderLayout>
       <div className="max-w-7xl mx-auto py-8">
-        
+
         {/* Portal Header & Navigation */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
           <div>

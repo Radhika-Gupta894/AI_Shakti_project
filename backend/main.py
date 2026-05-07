@@ -42,6 +42,7 @@ import models.evaluation
 import models.audit_log
 import models.fraud_alert
 import models.criterion
+import models.tender_required_document
 
 # ==================================================
 # MODEL IMPORTS
@@ -106,21 +107,11 @@ app = FastAPI(
 )
 
 # ==================================================
-# CORS (Must be at the top for maximum reliability)
+# GLOBAL CORS CONFIGURATION
 # ==================================================
-# ==================================================
-# CORS (Strict but Flexible for Development)
-# ==================================================
-# When allow_credentials=True, allow_origins cannot be ["*"].
-# We allow the most common local development ports.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
