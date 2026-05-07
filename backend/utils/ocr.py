@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Configure Tesseract Path from .env
-tesseract_path = os.getenv("TESSERACT_CMD_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+tesseract_path = os.getenv("TESSERACT_PATH") or os.getenv("TESSERACT_CMD_PATH") or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 HAS_TESSERACT_BIN = False
 if HAS_TESSERACT_LIB:
@@ -56,8 +56,8 @@ def extract_image_text(image_path):
     Extract text from an image using Tesseract OCR or Simulation.
     """
     if not HAS_TESSERACT_LIB or not HAS_TESSERACT_BIN:
-        logger.info("✨ OCR SIMULATION: Extracting text from image...")
-        return f"SIMULATED OCR TEXT for {os.path.basename(image_path)}. Document appears to be a valid certificate."
+        logger.warning("⚠️ OCR not available for image.")
+        return "OCR not available"
 
     processed_path = None
     try:
@@ -99,17 +99,8 @@ def extract_pdf_text(pdf_path):
         except:
             pass
         
-        logger.info("✨ OCR SIMULATION: Extracting text from scanned PDF...")
-        # Return different mock text based on filename
-        fname = os.path.basename(pdf_path).lower()
-        if "financial" in fname or "audit" in fname:
-            return "FINANCIAL AUDIT REPORT FY 2024-25. Turnover: 85,000,000 INR. Net Profit: 12,000,000 INR. Debt-to-Equity: 0.5. Auditor: M/S SHAKTI & CO."
-        elif "gst" in fname:
-            return "GOODS AND SERVICES TAX REGISTRATION CERTIFICATE. GSTIN: 09AAACH1234F1Z5. Legal Name: SHAKTI INFRASTRUCTURE LTD. Date of Issue: 12/01/2022."
-        elif "iso" in fname:
-            return "ISO 9001:2015 CERTIFICATION. Certificate No: ISO-9001-SHAKTI-2024. Valid Until: 2027-05-15. Scope: Construction and Infrastructure services."
-        return f"SIMULATED OCR TEXT for {os.path.basename(pdf_path)}. This is a scanned government document containing multiple pages of eligibility proof."
-        
+        logger.warning("⚠️ OCR not available for scanned PDF.")
+        return "OCR not available"
     all_text = ""
     try:
         with pdfplumber.open(pdf_path) as pdf:

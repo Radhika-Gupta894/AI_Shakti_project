@@ -9,7 +9,11 @@ import {
   Cpu, Zap, Send, Edit3, Save, X, Lightbulb, Plus, Flag, FileJson, Eraser, ShieldAlert, Trash2
 } from 'lucide-react';
 import { apiService, API_BASE_URL } from '../services/api';
+<<<<<<< HEAD
 import { useNavigate, useSearchParams } from 'react-router-dom';
+=======
+import { useNavigate, useLocation } from 'react-router-dom';
+>>>>>>> e45c444 (my local changes)
 
 const StatCard = ({ title, value, sub, icon: Icon, bgClass, textClass, delay }) => (
   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay }}
@@ -87,6 +91,20 @@ const CriteriaAnalysis = () => {
   const [annotations, setAnnotations] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState(null);
+<<<<<<< HEAD
+=======
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  
+  // AI Chat & Status states
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMsgs, setChatMsgs] = useState([{ sender: 'ai', text: 'Hello! I am the SHAKTI AI Assistant. I have extracted and deduplicated the criteria for this tender. How can I help?' }]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [sysStatus, setSysStatus] = useState(null);
+  const chatEndRef = useRef(null);
+
+  const location = useLocation();
+>>>>>>> e45c444 (my local changes)
 
   // Load Initial Data
   useEffect(() => {
@@ -102,6 +120,7 @@ const CriteriaAnalysis = () => {
           targetTender = allTenders.find(t => String(t.id) === String(urlTenderId));
         }
         
+<<<<<<< HEAD
         // Priority: 1. URL ID, 2. First tender with a file path, 3. First tender overall
         if (!targetTender && allTenders.length > 0) {
           targetTender = allTenders.find(t => t.file_path) || allTenders[0];
@@ -115,6 +134,22 @@ const CriteriaAnalysis = () => {
           fetchCriteria(targetTender.id);
         } else {
           console.warn("⚠️ No tender selected during initialization.");
+=======
+        const allTenders = tendersRes.data || [];
+        setTenders(allTenders);
+
+        // Priority: 1. State from location, 2. Latest Tender from API
+        const targetTenderId = location.state?.tenderId;
+        const initialTender = targetTenderId 
+          ? allTenders.find(t => t.id === targetTenderId)
+          : tenderRes.data;
+
+        if (initialTender) {
+          setSelectedTender(initialTender);
+          setSelectedTenderId(initialTender.id);
+          setNewCriteria(prev => ({ ...prev, tender_id: initialTender.id }));
+          fetchCriteria(initialTender.id);
+>>>>>>> e45c444 (my local changes)
         }
       } catch (err) {
         console.error("❌ Initialization failed:", err);
@@ -124,7 +159,11 @@ const CriteriaAnalysis = () => {
       }
     };
     init();
+<<<<<<< HEAD
   }, [urlTenderId]);
+=======
+  }, [location.state]);
+>>>>>>> e45c444 (my local changes)
 
   const fetchCriteria = async (tenderId) => {
     try {
@@ -158,13 +197,31 @@ const CriteriaAnalysis = () => {
     if (!selectedTenderId) return showToast("Please select a tender first", "error");
     setIsLoading(true);
     try {
-      const res = await apiService.extractCriteria(selectedTenderId);
+      const res = await apiService.extractCriteria(selectedTenderId, true); // force=true to always re-run
       if (res.data.success) {
+<<<<<<< HEAD
         setCriteria(res.data.data || []);
         showToast(`AI successfully extracted ${res.data.count} new criteria!`);
       }
     } catch (err) {
       const msg = err.response?.data?.error || err.message || "AI Extraction failed";
+=======
+        const data = res.data.data || [];
+        setCriteria(data);
+        if (data.length === 0) {
+          showToast(res.data.message || "No criteria found in document. Try a different file.", "warning");
+        } else {
+          showToast(`✅ AI extracted ${res.data.count || data.length} criteria from document!`, "success");
+        }
+      } else {
+        const errMsg = res.data.error || "AI was unable to process this document";
+        console.error("❌ Extraction backend error:", errMsg);
+        showToast(errMsg, "error");
+      }
+    } catch (err) {
+      console.error("❌ AI Extraction Error:", err);
+      const msg = err.response?.data?.error || err.response?.data?.detail || err.message || "AI Extraction failed";
+>>>>>>> e45c444 (my local changes)
       showToast(msg, "error");
     } finally {
       setIsLoading(false);
@@ -261,7 +318,26 @@ const CriteriaAnalysis = () => {
     } catch (e) { showToast("Failed to delete", "error"); }
   };
 
+<<<<<<< HEAD
   if (isLoading) return <AdminLayout><div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={48} /></div></AdminLayout>;
+=======
+  const handleHumanReview = (item) => {
+    showToast(`Criterion "${item.title}" flagged for manual human review.`, "success");
+  }
+
+  const stats = {
+    total: criteria.length, 
+    mandatory: criteria.filter(c => c.mandatory).length, 
+    optional: criteria.filter(c => !c.mandatory).length,
+    confidence: criteria.length > 0 ? Math.round(criteria.reduce((a, c) => {
+      const v = c.confidence !== undefined ? c.confidence : 0.9;
+      return a + (v > 1 ? v : v * 100);
+    }, 0) / criteria.length) : 0
+  };
+
+  if (isLoading) return <AdminLayout><div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={48}/></div></AdminLayout>;
+  if (!selectedTender && tenders.length === 0) return <AdminLayout><div className="flex flex-col items-center justify-center h-[60vh]"><AlertCircle size={40} className="text-slate-400 mb-4"/><h2 className="text-2xl font-bold">No Tender Data</h2><button onClick={() => navigate('/admin/upload')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl">Go to Upload</button></div></AdminLayout>;
+>>>>>>> e45c444 (my local changes)
 
   return (
     <AdminLayout>
@@ -322,6 +398,7 @@ const CriteriaAnalysis = () => {
                 </div>
               </div>
             </div>
+<<<<<<< HEAD
 
             <div className="flex flex-wrap items-center gap-3">
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleAIExtract} 
@@ -365,6 +442,31 @@ const CriteriaAnalysis = () => {
                 <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </motion.button>
             </div>
+=======
+            <p className="text-slate-500 mt-2 flex items-center gap-2"><FileText size={16} />{selectedTender?.title || 'No tender selected'}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={() => handleAIExtract(true)} 
+              disabled={isLoading} 
+              className="px-4 py-2 bg-rose-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-rose-500 shadow-md transition-all active:scale-95 disabled:opacity-50"
+              title="Clears existing criteria and runs fresh AI analysis"
+            >
+              {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Eraser size={16}/>} Reset & Re-Extract
+            </button>
+            <button onClick={handleAIExtract} disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-500 shadow-md transition-all active:scale-95 disabled:opacity-50">
+              {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>} Extract with AI
+            </button>
+            <button onClick={fetchSummary} className="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-indigo-600 flex items-center gap-2 hover:bg-indigo-100"><Lightbulb size={16}/> AI Summary</button>
+            <button onClick={async () => {
+              try {
+                const res = await apiService.getLatestTender(); // Or specific endpoint for raw text
+                alert("Extracted Document Text:\n\n" + (res.data.text_content || "No text extracted yet. Ensure the document is not just images."));
+              } catch(e) { showToast("Failed to fetch text", "error"); }
+            }} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50">
+              <FileText size={16}/> View Raw Text
+            </button>
+>>>>>>> e45c444 (my local changes)
           </div>
         </div>
 
@@ -449,6 +551,121 @@ const CriteriaAnalysis = () => {
                     {cat}
                   </button>
                 ))}
+<<<<<<< HEAD
+=======
+                <div className="w-8 h-[1px] bg-slate-200 my-2"></div>
+                {['bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-orange-400', 'bg-yellow-400'].map(c => (
+                  <button key={c} onClick={() => setActiveColor(c)} className={`w-5 h-5 rounded-full ${c} ${activeColor === c ? 'ring-2 ring-offset-2 ring-slate-400' : 'opacity-70 hover:opacity-100'}`} />
+                ))}
+              </div>
+              
+              {/* PDF Container Mock */}
+              <div className="flex-1 bg-slate-200 overflow-auto relative p-8 flex justify-center items-start cursor-crosshair">
+                <div 
+                  onPointerDown={handlePointerDown} 
+                  onPointerMove={handlePointerMove} 
+                  onPointerUp={handlePointerUp} 
+                  onPointerLeave={handlePointerUp}
+                  style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.2s', touchAction: 'none' }} 
+                  className={`w-full max-w-3xl relative shadow-2xl ${activeTool !== 'cursor' ? 'cursor-crosshair' : ''}`}
+                >
+                   {/* Draw existing annotations */}
+                   <div className="absolute inset-0 z-30 pointer-events-none">
+                     {annotations.map(ann => {
+                        const isEraser = activeTool === 'eraser';
+                        const eraseProps = isEraser ? { onPointerDown: (e) => handleDeleteAnnotation(ann.id, e) } : {};
+                        
+                        if (ann.type === 'highlight') {
+                           return <div key={ann.id} {...eraseProps} style={{ left: Math.min(ann.startX, ann.endX), top: Math.min(ann.startY, ann.endY), width: Math.abs(ann.endX - ann.startX), height: Math.abs(ann.endY - ann.startY) }} className={`absolute opacity-40 mix-blend-multiply ${ann.color} ${isEraser ? 'pointer-events-auto cursor-pointer hover:bg-red-500 hover:opacity-80' : ''}`} />
+                        }
+                        if (ann.type === 'pen') {
+                           return <svg key={ann.id} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none"><polyline {...eraseProps} points={ann.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={getColorHex(ann.color)} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className={isEraser ? 'pointer-events-auto cursor-pointer hover:stroke-red-500' : ''} /></svg>
+                        }
+                        if (ann.type === 'note') {
+                           return (
+                              <div key={ann.id} {...eraseProps} style={{ left: ann.x, top: ann.y }} className={`absolute w-48 shadow-xl p-2 rounded-br-xl rounded-tr-xl rounded-bl-xl ${ann.color.replace('bg-', 'bg-').replace('400', '100')} border ${ann.color.replace('bg-', 'border-')} pointer-events-auto ${isEraser ? 'cursor-pointer hover:border-red-500 opacity-50' : ''}`}>
+                                 <StickyNote size={14} className="mb-1 text-slate-700" />
+                                 <textarea autoFocus placeholder="Add note..." className={`w-full text-xs bg-transparent border-none outline-none resize-none h-16 text-slate-800 ${isEraser ? 'pointer-events-none' : ''}`} defaultValue={ann.content} />
+                              </div>
+                           )
+                        }
+                        if (ann.type === 'text') {
+                           return (
+                              <div key={ann.id} {...eraseProps} style={{ left: ann.x, top: ann.y - 12 }} className={`absolute pointer-events-auto ${isEraser ? 'cursor-pointer opacity-50 bg-red-100' : ''}`}>
+                                 <input autoFocus type="text" placeholder="Type text..." className={`bg-transparent font-bold text-lg outline-none border-b border-dashed border-slate-400 placeholder-slate-400 ${isEraser ? 'pointer-events-none' : ''}`} style={{ color: getColorHex(ann.color) }} />
+                              </div>
+                           )
+                        }
+                        return null;
+                     })}
+                     
+                     {/* Draw currently drawing path */}
+                     {currentPath && currentPath.type === 'highlight' && (
+                           <div style={{ left: Math.min(currentPath.startX, currentPath.endX), top: Math.min(currentPath.startY, currentPath.endY), width: Math.abs(currentPath.endX - currentPath.startX), height: Math.abs(currentPath.endY - currentPath.startY) }} className={`absolute opacity-40 mix-blend-multiply ${currentPath.color}`} />
+                     )}
+                     {currentPath && currentPath.type === 'pen' && (
+                           <svg className="absolute inset-0 w-full h-full overflow-visible">
+                              <polyline points={currentPath.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={getColorHex(currentPath.color)} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                           </svg>
+                     )}
+                   </div>
+                   {/* Highlight mapping overlay */}
+                   <AnimatePresence>
+                     {mappedCriteria && (
+                       <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                         className={`absolute top-[25%] left-[5%] w-[90%] h-24 ${activeColor.replace('bg-', 'bg-').replace('400', '200')} bg-opacity-50 border-2 ${activeColor.replace('bg-', 'border-')} rounded z-20 pointer-events-none flex items-start justify-end p-2`}
+                       >
+                         <motion.div initial={{ y: -10 }} animate={{ y: 0 }} className={`${activeColor} text-white text-[10px] font-black px-3 py-1 rounded shadow-lg uppercase tracking-widest`}>
+                           {mappedCriteria.category} MATCH
+                         </motion.div>
+                       </motion.div>
+                     )}
+                   </AnimatePresence>
+                   {selectedTender?.file_path ? (
+                      <iframe 
+                        key={`pdf-${pdfPage}`} 
+                        src={`${API_BASE_URL}/${selectedTender.file_path.replace(/\\/g, '/')}#page=${pdfPage}`} 
+                        className="w-full h-[1000px] bg-white shadow-xl pointer-events-none" 
+                        title="PDF" 
+                      />
+                   ) : (
+                     <div className="w-full h-[1000px] bg-white shadow-xl p-12 text-slate-800 font-serif overflow-hidden relative">
+                       <div className="absolute top-0 left-0 w-full h-8 bg-slate-100 border-b border-slate-200"></div>
+                       <div className="absolute top-2 right-4 text-xs font-bold text-slate-400">Page {pdfPage}</div>
+                       <h1 className="text-3xl font-black text-slate-900 mb-8 border-b-2 border-slate-900 pb-4 mt-4 uppercase tracking-widest text-center">Government Procurement Tender Document</h1>
+                       {pdfPage === 1 ? (
+                         <div className="space-y-6 text-sm leading-relaxed max-w-2xl mx-auto mt-12">
+                           <h2 className="text-xl font-bold uppercase mb-4 text-center">Section 4: Eligibility Criteria</h2>
+                           <p><strong>4.1 Financial Standing:</strong> The bidder must have an average annual turnover of at least <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">₹5 Crores</span> over the last 3 financial years. Audited balance sheets must be provided.</p>
+                           <p><strong>4.2 Technical Competence:</strong> The bidder must possess a valid <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">ISO 9001:2015 certification</span> for quality management to ensure standardized delivery processes across the contract period.</p>
+                           <p><strong>4.3 Statutory Compliance:</strong> A valid <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">GST registration certificate</span> is strictly required to be submitted along with the PAN card details.</p>
+                           <p><strong>4.4 Past Experience:</strong> As per the experience clause, the bidder should have completed at least <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">3 similar government projects</span> in the last 5 years.</p>
+                           <p><strong>4.5 Financial Health:</strong> The net worth of the bidder must be positive as per the latest audited balance sheet submitted. Failure to meet this will lead to disqualification.</p>
+                         </div>
+                       ) : pdfPage === 2 ? (
+                         <div className="space-y-6 text-sm leading-relaxed max-w-2xl mx-auto mt-12">
+                           <h2 className="text-xl font-bold uppercase mb-4 text-center">Section 5: General Terms & Conditions</h2>
+                           <p><strong>5.1 Delivery Schedule:</strong> The successful bidder must deliver the entire scope of work within <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">120 days</span> from the date of issuance of the work order.</p>
+                           <p><strong>5.2 Performance Bank Guarantee:</strong> A PBG equivalent to <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">10% of the total contract value</span> must be submitted within 15 days of contract signing.</p>
+                           <p><strong>5.3 Liquidated Damages:</strong> Delay in delivery will attract a penalty of <span className="bg-yellow-200 font-bold px-1 rounded border border-yellow-300">0.5% per week</span> of the delayed goods value, up to a maximum of 10%.</p>
+                           <p><strong>5.4 Subcontracting:</strong> Subcontracting is strictly <span className="bg-red-200 font-bold px-1 rounded border border-red-300 text-red-800">prohibited</span> without prior written consent from the competent authority.</p>
+                         </div>
+                       ) : (
+                         <div className="space-y-6 text-sm leading-relaxed max-w-2xl mx-auto mt-12">
+                           <h2 className="text-xl font-bold uppercase mb-4 text-center">Section 6: Appendices</h2>
+                           <p><strong>Appendix A:</strong> List of approved makes and models for the IT hardware.</p>
+                           <p><strong>Appendix B:</strong> Format for the Non-Disclosure Agreement (NDA) to be signed by all deployed resources.</p>
+                           <p><strong>Appendix C:</strong> Detailed Service Level Agreement (SLA) metrics and associated penalties for non-compliance during the AMC period.</p>
+                           <div className="mt-12 border border-slate-300 p-4 bg-slate-50 text-center text-slate-500 font-bold tracking-widest">
+                              [ END OF DOCUMENT ]
+                           </div>
+                         </div>
+                       )}
+                       <div className="absolute bottom-8 right-12 opacity-50"><img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Seal" className="w-24 opacity-20" /></div>
+                     </div>
+                   )}
+                </div>
+>>>>>>> e45c444 (my local changes)
               </div>
               <button 
                 onClick={() => setAddCriteriaModal(true)} 
@@ -457,6 +674,7 @@ const CriteriaAnalysis = () => {
                 <Plus size={20} />
               </button>
             </div>
+<<<<<<< HEAD
             
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               {sortedCriteria.length > 0 ? (
@@ -473,6 +691,56 @@ const CriteriaAnalysis = () => {
                       <div className="flex items-center gap-2">
                         <div className="text-xs font-black text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
                           {Math.round((item.confidence || 0.95) * 100)}% Match
+=======
+          </div>
+
+          {/* RIGHT: ANALYSIS PANEL */}
+          <div className="xl:col-span-6 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div className="flex flex-wrap gap-2">
+                {['All', 'Financial', 'Technical', 'Compliance', 'Experience'].map((cat) => (
+                  <button key={cat} onClick={() => setFilter(cat)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === cat ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>{cat}</button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    setNewCriteria(prev => ({...prev, tender_id: selectedTenderId || ''}));
+                    setAddCriteriaModal(true);
+                  }} 
+                  className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 hover:bg-slate-700 transition-colors"
+                >
+                  <Plus size={14}/> Add
+                </button>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search criteria..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none w-40 transition-all" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="divide-y divide-slate-100">
+                {sortedCriteria.map((item) => {
+                  const confFraction = item.confidence !== undefined ? item.confidence : 0.9;
+                  // If the AI somehow returns 95 instead of 0.95, normalize it
+                  const conf = confFraction > 1 ? confFraction : Math.round(confFraction * 100);
+                  const isLowConf = conf < 80;
+                  return (
+                  <div key={item.id} className="group">
+                    <div onClick={() => setExpandedId(expandedId === item.id ? null : item.id)} className={`p-5 cursor-pointer hover:bg-blue-50/30 transition-colors ${expandedId === item.id ? 'bg-blue-50/50' : ''}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex gap-3 items-center">
+                          <CategoryBadge category={item.category} />
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${item.mandatory ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>{item.mandatory ? 'Mandatory' : 'Optional'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <div className="flex items-center gap-1.5">
+                             <div className={`w-2 h-2 rounded-full ${conf >= 90 ? 'bg-emerald-500' : isLowConf ? 'bg-red-500' : 'bg-amber-500'}`}/> 
+                             <span className="text-[10px] font-bold text-slate-500">{conf}%</span>
+                           </div>
+                           <ChevronDown size={16} className={`text-slate-400 transition-transform ${expandedId === item.id ? 'rotate-180' : ''}`} />
+>>>>>>> e45c444 (my local changes)
                         </div>
                         {item.mandatory && <span className="p-1 bg-red-50 text-red-500 rounded-lg" title="Mandatory"><AlertCircle size={14} /></span>}
                       </div>
@@ -480,6 +748,7 @@ const CriteriaAnalysis = () => {
                     <h4 className="text-base font-black text-slate-800 mb-2 leading-tight group-hover:text-blue-600 transition-colors">{item.title}</h4>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6 line-clamp-2">{item.description}</p>
                     
+<<<<<<< HEAD
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleMapSource(item)} 
@@ -502,6 +771,56 @@ const CriteriaAnalysis = () => {
                   <p className="text-[10px] font-black uppercase tracking-[0.2em]">No Extraction Detected</p>
                 </div>
               )}
+=======
+                    {/* Expanded Details */}
+                    <AnimatePresence>
+                      {expandedId === item.id && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-slate-50 border-t border-slate-100">
+                          <div className="p-6 space-y-4">
+                            <div>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Extracted Logic & Requirement</p>
+                              <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200">{item.description || item.title}</p>
+                            </div>
+                            
+                            {item.value && item.value !== "None" && item.value !== "" && (
+                              <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Extracted Value / Threshold</p>
+                                <p className="text-sm font-bold text-blue-700 bg-blue-50 p-2 rounded inline-block border border-blue-200">{item.value}</p>
+                              </div>
+                            )}
+                            
+                            {isLowConf && (
+                              <div className="bg-red-50 border border-red-100 p-3 rounded-lg flex items-start gap-2">
+                                <AlertCircle size={16} className="text-red-500 mt-0.5" />
+                                <p className="text-xs text-red-700"><strong>Low Confidence Extraction.</strong> The OCR quality was poor or the requirement phrasing was ambiguous. Human validation is strongly recommended.</p>
+                              </div>
+                            )}
+
+                            <div className="flex gap-3">
+                              {isLowConf ? (
+                                <button onClick={(e) => { e.stopPropagation(); handleHumanReview(item); }} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-500 transition-colors flex items-center justify-center gap-2">
+                                  <Flag size={14}/> Flag for Manual Review
+                                </button>
+                              ) : (
+                                <button onClick={(e) => { e.stopPropagation(); handleMapSource(item); }} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-500 transition-colors flex items-center justify-center gap-2">
+                                  <Zap size={14}/> Validate Source Mapping
+                                </button>
+                              )}
+                              
+                              <button onClick={(e) => { e.stopPropagation(); setExplainModal(item); }} className="flex-1 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-100 transition-colors flex items-center justify-center gap-2">
+                                <Lightbulb size={14} className="text-amber-500"/> AI Explanation
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); setEditCriteria(item); }} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-100 transition-colors" title="Edit Criteria"><Edit3 size={14}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteCriteria(item.id); }} className="px-4 py-2 bg-white border border-red-200 text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Delete Criteria"><Eraser size={14}/></button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )})}
+              </div>
+>>>>>>> e45c444 (my local changes)
             </div>
           </div>
         </div>

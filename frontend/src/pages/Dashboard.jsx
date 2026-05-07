@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from "react-router-dom";
 import AdminLayout from '../layouts/AdminLayout';
+import AIChatbot from '../components/AIChatbot';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar
@@ -122,11 +123,7 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
-  // AI Assistant State
   const [showAI, setShowAI] = useState(false);
-  const [aiMsg, setAiMsg] = useState('');
-  const [aiChat, setAiChat] = useState([{ sender: 'ai', text: 'Hello! I am SHAKTI AI. I can analyze dashboard metrics, summarize tenders, and detect anomalies. Ask me anything.' }]);
-  const [aiLoading, setAiLoading] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -153,17 +150,7 @@ const Dashboard = () => {
 
   const handleAskAI = async (e) => {
     e.preventDefault();
-    if (!aiMsg.trim()) return;
-    const q = aiMsg;
-    setAiChat(p => [...p, { sender: 'user', text: q }]);
-    setAiMsg('');
-    setAiLoading(true);
-    try {
-      const res = await apiService.askAi(q);
-      setAiChat(p => [...p, { sender: 'ai', text: res.data.answer }]);
-    } catch(err) {
-      setAiChat(p => [...p, { sender: 'ai', text: 'Connection to intelligence core interrupted.' }]);
-    } finally { setAiLoading(false); }
+    setShowAI(true);
   };
 
   const handleExport = (type) => {
@@ -301,7 +288,7 @@ const Dashboard = () => {
       {/* Data Tables Row */}
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Bidders Table */}
-        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[500px]">
+        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
           <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
             <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Active Bidders</h3>
             <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-100">{filteredEvaluations.length} Results</span>
@@ -332,8 +319,67 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Audit Log Feed */}
-        <div className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden flex flex-col h-[500px]">
+        {/* Tenders Management Table */}
+        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Recent Tenders</h3>
+            <Link to="/admin/upload" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">+ New Tender</Link>
+          </div>
+          <div className="flex-1 overflow-auto custom-scrollbar">
+            <table className="w-full text-left">
+              <thead className="bg-white sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="py-3 pl-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tender Title</th>
+                  <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                  <th className="py-3 pr-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tendersLoading ? (
+                  Array.from({length: 5}).map((_,i) => <tr key={i}><td colSpan="4" className="p-4"><SkeletonBox className="h-10 w-full rounded-xl"/></td></tr>)
+                ) : tenders && tenders.length > 0 ? (
+                  tenders.map((tender) => (
+                    <tr key={tender.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 pl-6">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-slate-800 line-clamp-1">{tender.title}</span>
+                          <span className="text-[10px] font-bold text-slate-400 font-mono">#{tender.id}</span>
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${
+                          tender.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {tender.status}
+                        </span>
+                      </td>
+                      <td className="py-4 text-xs font-bold text-slate-500">
+                        {new Date(tender.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 pr-6 text-right">
+                        <Link 
+                          to="/admin/criteria" 
+                          state={{ tenderId: tender.id }}
+                          className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                        >
+                          View Criteria
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan="4" className="py-20 text-center text-slate-400 font-bold text-sm">No tenders uploaded yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Audit Log Feed - Moved to full width row or kept below */}
+      <div className="grid lg:grid-cols-1 gap-6 mb-8">
+        <div className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden flex flex-col h-[400px]">
           <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
           <h3 className="font-black text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
             <Clock size={16} className="text-blue-400" /> Live Audit Trail
@@ -365,50 +411,7 @@ const Dashboard = () => {
       </div>
 
       {/* AI Assistant Slide-over Panel */}
-      <AnimatePresence>
-        {showAI && (
-          <motion.div initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 400, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed top-0 right-0 w-96 h-screen bg-white shadow-2xl border-l border-slate-100 z-50 flex flex-col"
-          >
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200"><MessageSquare size={18} /></div>
-                <div>
-                  <h3 className="font-black text-slate-900">SHAKTI Intelligence</h3>
-                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Core Active</p>
-                </div>
-              </div>
-              <button onClick={() => setShowAI(false)} className="p-2 text-slate-400 hover:text-slate-700 bg-white rounded-full shadow-sm"><X size={16} /></button>
-            </div>
-            
-            <div className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar bg-slate-50">
-              {aiChat.map((msg, i) => (
-                <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-slate-700 border border-slate-100 rounded-bl-sm'}`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {aiLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-bl-sm flex gap-2 shadow-sm">
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}/>
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}/>
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}/>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleAskAI} className="p-4 bg-white border-t border-slate-100">
-              <div className="relative flex items-center">
-                <input type="text" value={aiMsg} onChange={e => setAiMsg(e.target.value)} placeholder="Command SHAKTI AI..." className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all" />
-                <button type="submit" disabled={aiLoading || !aiMsg.trim()} className="absolute right-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"><Send size={14} /></button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AIChatbot role="admin" />
     </AdminLayout>
   );
 };

@@ -9,8 +9,17 @@ from dotenv import load_dotenv
 # ==================================================
 # LOAD ENV VARIABLES
 # ==================================================
-env_path = os.path.join(os.path.dirname(__file__), ".env")
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=env_path)
+
+# ==================================================
+# SET UPLOAD DIR EARLY — before any route imports
+# main.py is the entry point so __file__ is always reliable here
+# ==================================================
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_UPLOADS_DIR = os.path.join(_BACKEND_DIR, "uploads")
+os.makedirs(_UPLOADS_DIR, exist_ok=True)
+os.environ["SHAKTI_UPLOAD_DIR"] = _UPLOADS_DIR
 
 # ==================================================
 # FASTAPI IMPORTS
@@ -75,18 +84,59 @@ async def lifespan(app: FastAPI):
         logger.info("📡 Database: Verifying tables and schema...")
         Base.metadata.create_all(bind=engine)
         
-        # Safe migration using Inspector
         inspector = inspect(engine)
-        existing_columns = [c['name'] for c in inspector.get_columns("criteria")]
+        table_names = inspector.get_table_names()
+        criteria_cols = [c['name'] for c in inspector.get_columns("criteria")] if "criteria" in table_names else []
+        eval_cols = [c['name'] for c in inspector.get_columns("evaluations")] if "evaluations" in table_names else []
         
         with engine.begin() as conn:
-            if "weightage" not in existing_columns:
+            # 1. Criteria Table Migrations
+            if "weightage" not in criteria_cols:
                 logger.info("➕ Migrating: Adding 'weightage' to criteria")
                 conn.execute(text("ALTER TABLE criteria ADD COLUMN weightage FLOAT DEFAULT 0.0"))
             
-            if "max_score" not in existing_columns:
+            if "max_score" not in criteria_cols:
                 logger.info("➕ Migrating: Adding 'max_score' to criteria")
                 conn.execute(text("ALTER TABLE criteria ADD COLUMN max_score FLOAT DEFAULT 100.0"))
+
+            # 2. Evaluations Table Migrations
+            if "evaluations" in inspector.get_table_names():
+                if "confidence" not in eval_cols:
+                    logger.info("➕ Migrating: Adding 'confidence' to evaluations")
+                    conn.execute(text("ALTER TABLE evaluations ADD COLUMN confidence FLOAT DEFAULT 0.0"))
+                if "total_score" not in eval_cols:
+                    logger.info("➕ Migrating: Adding 'total_score' to evaluations")
+                    conn.execute(text("ALTER TABLE evaluations ADD COLUMN total_score FLOAT DEFAULT 0.0"))
+                
+                # Cleanup old column if present
+                if "confidence_score" in eval_cols:
+                    logger.info("🧹 Migration: Detected old 'confidence_score' column")
+                    # We keep it for safety but focus on new columns
+            
+            # 3. Ensure evaluation_details exists
+            if "evaluation_details" not in inspector.get_table_names():
+                logger.info("➕ Migrating: Creating 'evaluation_details' table")
+                conn.execute(text("""
+                    CREATE TABLE evaluation_details (
+                        id SERIAL PRIMARY KEY,
+                        evaluation_id INTEGER REFERENCES evaluations(id) ON DELETE CASCADE,
+                        criterion_id INTEGER REFERENCES criteria(id) ON DELETE CASCADE,
+                        status VARCHAR(50),
+                        bidder_value TEXT,
+                        confidence FLOAT,
+                        source VARCHAR(255),
+                        explanation TEXT,
+                        score FLOAT DEFAULT 0
+                    )
+                """))
+
+            # 4. Users Table Migrations
+            if "users" in inspector.get_table_names():
+                user_cols = [c['name'] for c in inspector.get_columns("users")]
+                for col in ["phone", "department", "designation", "bio", "profile_picture"]:
+                    if col not in user_cols:
+                        logger.info(f"➕ Migrating: Adding '{col}' to users")
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} TEXT"))
                 
         logger.info("✅ Database: Schema is up to date.")
     except Exception as e:
@@ -174,10 +224,10 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Ensure upload directory exists
-os.makedirs("uploads", exist_ok=True)
-# Static files (for PDF preview) - Mounted under /api/uploads to match frontend expectations
-app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+# UPLOADS_ABS_DIR is already set above — reuse for StaticFiles
+UPLOADS_ABS_DIR = os.environ["SHAKTI_UPLOAD_DIR"]
+# Serve uploaded files at /api/uploads/<filename> — required for PDF preview in browser
+app.mount("/api/uploads", StaticFiles(directory=UPLOADS_ABS_DIR), name="uploads")
 
 # ==================================================
 # INCLUDE ROUTES

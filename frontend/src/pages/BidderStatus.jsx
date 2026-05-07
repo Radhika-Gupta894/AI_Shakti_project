@@ -10,6 +10,7 @@ import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import AIChatbot from '../components/AIChatbot';
 
 // --- Shared Components ---
 
@@ -692,6 +693,7 @@ const BidderStatus = () => {
         </AnimatePresence>
 
       </div>
+      <AIChatbot role="bidder" />
     </BidderLayout>
   );
 };

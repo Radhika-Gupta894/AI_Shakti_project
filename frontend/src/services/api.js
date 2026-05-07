@@ -126,6 +126,7 @@ export const apiService = {
   addCriterion: (data) => api.post('/criteria/add', data),
   updateCriterion: (id, data) => api.put(`/criteria/${id}`, data),
   deleteCriterion: (id) => api.delete(`/criteria/${id}`),
+<<<<<<< HEAD
 
   // AI Services
   extractCriteria: (tenderId) => api.post(`/extract-criteria/${tenderId}`),
@@ -143,6 +144,20 @@ export const apiService = {
     api.delete(`/required-documents/${docId}`),
   getBidderUploadedDocuments: (bidderId, tenderId) =>
     api.get(`/bidders/${bidderId}/uploaded-documents`, { params: { tender_id: tenderId } }),
+=======
+  extractCriteria: (tender_id, force = false) => api.post('/criteria/extract', { tender_id, force }),
+
+  // Profile APIs
+  getProfile: () => api.get('/profile'),
+  updateProfile: (data) => api.put('/profile', data),
+  uploadProfilePicture: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/profile/upload-picture', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+>>>>>>> e45c444 (my local changes)
 };
 
 export default api;

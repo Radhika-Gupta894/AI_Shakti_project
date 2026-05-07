@@ -9,13 +9,29 @@ class Evaluation(Base):
     id = Column(Integer, primary_key=True, index=True)
     bidder_id = Column(Integer, ForeignKey("bidders.id"))
     tender_id = Column(Integer, ForeignKey("tenders.id"))
-    criterion = Column(String, nullable=True) # Making it optional to match original
-    status = Column(String) # pass, fail, pending
-    confidence_score = Column(Float)
-    risk_level = Column(String) # LOW, MEDIUM, HIGH
-    reason = Column(Text)
-    detailed_report = Column(JSON)
+    status = Column(String) # Eligible, Not Eligible, Needs Manual Review
+    confidence = Column(Float)
+    total_score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    # Relationships
     bidder = relationship("Bidder", backref="evaluations")
     tender = relationship("Tender", backref="evaluations")
+    details = relationship("EvaluationDetail", back_populates="evaluation", cascade="all, delete-orphan")
+
+class EvaluationDetail(Base):
+    __tablename__ = "evaluation_details"
+
+    id = Column(Integer, primary_key=True, index=True)
+    evaluation_id = Column(Integer, ForeignKey("evaluations.id"))
+    criterion_id = Column(Integer, ForeignKey("criteria.id"))
+    status = Column(String) # PASS, FAIL, REVIEW
+    bidder_value = Column(Text)
+    confidence = Column(Float)
+    source = Column(String) # e.g. "Financial Statement Page 4"
+    explanation = Column(Text)
+    score = Column(Float, default=0.0)
+
+    # Relationships
+    evaluation = relationship("Evaluation", back_populates="details")
+    criterion = relationship("Criterion", backref="evaluation_details")

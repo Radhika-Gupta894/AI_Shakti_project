@@ -237,7 +237,11 @@ const ApplyTender = () => {
     }
   };
 
+<<<<<<< HEAD
   const isFormComplete = requiredDocs.length > 0 && uploadedDocs.length >= requiredDocs.filter(d => d.mandatory).length;
+=======
+  // const isFormComplete = uploadedDocs.length >= 3;
+>>>>>>> e45c444 (my local changes)
 
   return (
     <BidderLayout>

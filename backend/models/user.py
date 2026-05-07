@@ -11,4 +11,9 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
     role = Column(String, default="bidder") # e.g., 'admin', 'bidder', 'official'
+    phone = Column(String, nullable=True)
+    department = Column(String, nullable=True)
+    designation = Column(String, nullable=True)
+    bio = Column(String, nullable=True)
+    profile_picture = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

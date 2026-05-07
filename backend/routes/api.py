@@ -2,8 +2,13 @@ from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPE
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database.db import get_db
+<<<<<<< HEAD
 from models import Tender, Bidder, BidderDocument, Evaluation, AuditLog, User, ManualReview, ClarificationRequest, FraudAlert, Criterion, TenderRequiredDocument
 from pydantic import BaseModel
+=======
+from models import Tender, Bidder, BidderDocument, Evaluation, EvaluationDetail, AuditLog, User, ManualReview, ClarificationRequest, FraudAlert, Criterion
+from services.evaluator import process_tender_upload, process_bidder_evaluation
+>>>>>>> e45c444 (my local changes)
 from services.ai_service import AIService
 from services.fraud_service import FraudDetectionService
 from services.evaluator import process_tender_upload, process_bidder_evaluation
@@ -20,6 +25,7 @@ import re
 import traceback
 import asyncio
 import random
+import json
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -65,16 +71,52 @@ class TenderIDRequest(BaseModel):
 
 api_router = APIRouter()
 
-UPLOAD_DIR = "uploads"
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
+
+# Use the upload dir set by main.py via env var — guaranteed to be correct absolute path
+# Fallback computation uses __file__ in case api.py is ever used standalone
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_BASE = os.path.dirname(BACKEND_DIR)
+UPLOAD_DIR = os.environ.get("SHAKTI_UPLOAD_DIR") or os.path.join(BACKEND_BASE, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+logger.info(f"📁 UPLOAD_DIR = {UPLOAD_DIR}")
+
+
+def resolve_upload_path(stored_path: str) -> str:
+    """
+    Robustly resolve any stored file path to an absolute path.
+    Handles: absolute paths, relative paths, filenames-only, legacy formats.
+    Always returns the correct path to backend/uploads/<filename>.
+    """
+    if not stored_path:
+        return ""
+
+    # Strategy 1: stored_path is already absolute and file exists
+    if os.path.isabs(stored_path) and os.path.exists(stored_path):
+        return stored_path
+
+    # Strategy 2: extract just the filename and build path from known UPLOAD_DIR
+    filename = os.path.basename(stored_path)
+    candidate = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(candidate):
+        return candidate
+
+    # Strategy 3: stored as relative path like "uploads/filename"
+    candidate2 = os.path.join(BACKEND_BASE, stored_path)
+    if os.path.exists(candidate2):
+        return candidate2
+
+    # Strategy 4: return best-guess path even if not found (caller will handle)
+    return candidate  # UPLOAD_DIR/filename is the canonical location
+
 
 
 def run_tender_analysis(tender_id: int, file_path: str, db_session_factory):
     db = db_session_factory()
     try:
         logger.info(f"⚙️ Background analysis started for Tender {tender_id}")
-        processing_result = asyncio.run(process_tender_upload(file_path))
+        resolved = resolve_upload_path(file_path)
+        logger.info(f"📂 Background task file: {resolved} | Exists: {os.path.exists(resolved)}")
+        processing_result = asyncio.run(process_tender_upload(resolved))
         criteria = processing_result.get('criteria', {})
         tender = db.query(Tender).filter(Tender.id == tender_id).first()
         if tender:
@@ -137,7 +179,8 @@ async def upload_tender(background_tasks: BackgroundTasks, file: UploadFile = Fi
         logger.info(f"📁 UPLOAD: Processing tender '{file.filename}'")
         file_id = str(uuid.uuid4())
         file_ext = os.path.splitext(file.filename)[1]
-        file_path = os.path.join(UPLOAD_DIR, f"tender_{file_id}{file_ext}")
+        file_name = f"tender_{file_id}{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, file_name)
 
         # Check if file is empty (Requirement #4)
         file.file.seek(0, os.SEEK_END)
@@ -151,7 +194,9 @@ async def upload_tender(background_tasks: BackgroundTasks, file: UploadFile = Fi
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        new_tender = Tender(title=file.filename, file_path=file_path, criteria={}, status="processing")
+        # Store only the filename in DB — full path is resolved at runtime
+        stored_path = file_name
+        new_tender = Tender(title=file.filename, file_path=stored_path, criteria={}, status="processing")
         db.add(new_tender)
         db.commit()
         db.refresh(new_tender)
@@ -179,6 +224,21 @@ def get_latest_tender(db: Session = Depends(get_db)):
         "criteria": tender.criteria or {},
         "file_path": tender.file_path,
         "created_at": tender.created_at.isoformat() if tender.created_at else None
+    }
+
+
+@api_router.get("/debug/uploads")
+async def debug_uploads():
+    """Debug endpoint — shows where files are being saved and what exists."""
+    files = []
+    if os.path.exists(UPLOAD_DIR):
+        files = os.listdir(UPLOAD_DIR)
+    return {
+        "UPLOAD_DIR": UPLOAD_DIR,
+        "UPLOAD_DIR_exists": os.path.exists(UPLOAD_DIR),
+        "SHAKTI_UPLOAD_DIR_env": os.environ.get("SHAKTI_UPLOAD_DIR", "NOT SET"),
+        "files_count": len(files),
+        "pdf_files": [f for f in files if f.endswith(".pdf")]
     }
 
 
@@ -284,41 +344,66 @@ async def upload_bidder_doc(
 
 @api_router.post("/evaluate-bidder")
 async def evaluate_bidder(tender_id: int, bidder_id: int, db: Session = Depends(get_db)):
-    tender = db.query(Tender).filter(Tender.id == tender_id).first()
-    bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
-    if not bidder:
-        bidder = Bidder(id=bidder_id, company_name=f"Demo Bidder {bidder_id}", gst_number="PENDING")
-        db.add(bidder)
+    try:
+        logger.info(f"🚀 Starting Evaluation for Bidder {bidder_id} on Tender {tender_id}")
+        
+        # 1. Fetch Context
+        tender = db.query(Tender).filter(Tender.id == tender_id).first()
+        bidder = db.query(Bidder).filter(Bidder.id == bidder_id).first()
+        criteria = db.query(Criterion).filter(Criterion.tender_id == tender_id).all()
+        
+        if not tender or not bidder:
+            raise HTTPException(status_code=404, detail="Tender or Bidder not found")
+        
+        if not criteria:
+            return JSONResponse(status_code=400, content={"success": False, "error": "No criteria defined for this tender."})
+
+        # 2. Fetch Documents
+        bidder_docs = db.query(BidderDocument).filter(
+            BidderDocument.bidder_id == bidder_id,
+            BidderDocument.tender_id == tender_id
+        ).all()
+        
+        if not bidder_docs:
+            return {"overall_status": "AWAITING_DOCS", "risk_score": 0, "message": "No documents uploaded."}
+
+        # 3. Execute Evaluation Engine
+        docs_list = [{"type": d.document_type, "file_path": d.file_path} for d in bidder_docs]
+        eval_data = await process_bidder_evaluation(criteria, docs_list)
+
+        # 4. Save to Database
+        # Clean old records
+        db.query(Evaluation).filter(Evaluation.bidder_id == bidder_id, Evaluation.tender_id == tender_id).delete()
+        
+        new_eval = Evaluation(
+            bidder_id=bidder_id,
+            tender_id=tender_id,
+            status=eval_data['overall_status'],
+            confidence=eval_data['confidence'],
+            total_score=eval_data['total_score']
+        )
+        db.add(new_eval)
+        db.flush()
+
+        for res in eval_data['results']:
+            detail = EvaluationDetail(
+                evaluation_id=new_eval.id,
+                criterion_id=res['criterion_id'],
+                status=res['status'],
+                bidder_value=res['bidder_value'],
+                confidence=res['confidence'],
+                source=res['source'],
+                explanation=res['explanation'],
+                score=res['score']
+            )
+            db.add(detail)
+        
         db.commit()
+        return eval_data
 
-    bidder_docs = db.query(BidderDocument).filter(
-        BidderDocument.bidder_id == bidder_id,
-        BidderDocument.tender_id == tender_id
-    ).all()
-
-    if not tender:
-        tender = Tender(id=tender_id, title=f"Tender #{tender_id}", status="active", criteria={})
-        db.add(tender)
-        db.commit()
-        db.refresh(tender)
-
-    if not bidder_docs:
-        return {"overall_status": "AWAITING_DOCS", "risk_score": 0, "message": "Waiting for documents."}
-
-    docs_list = [{"type": d.document_type, "file_path": d.file_path} for d in bidder_docs]
-    evaluation_result = await process_bidder_evaluation(tender.criteria, docs_list)
-
-    new_eval = Evaluation(
-        tender_id=tender_id,
-        bidder_id=bidder_id,
-        status=evaluation_result['overall_status'],
-        confidence_score=evaluation_result.get('risk_score', 0),
-        risk_level="LOW" if evaluation_result.get('risk_score', 0) < 30 else "HIGH",
-        detailed_report=evaluation_result
-    )
-    db.add(new_eval)
-    db.commit()
-    return evaluation_result
+    except Exception as e:
+        logger.error(f"❌ EVALUATION FAILURE: {str(e)}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 @api_router.post("/finalize-submission")
@@ -409,18 +494,13 @@ def get_stats(db: Session = Depends(get_db)):
 @api_router.get("/evaluations")
 def get_evaluations(db: Session = Depends(get_db)):
     try:
-        # Optimized: Only fetch necessary columns and limit to recent 50 for performance
         evaluations = db.query(Evaluation).order_by(Evaluation.created_at.desc()).limit(50).all()
-        
-        if not evaluations:
-            return []
+        if not evaluations: return []
 
-        # Bulk fetch related bidders and tenders
-        bidder_ids = list(set(e.bidder_id for e in evaluations if e.bidder_id))
-        tender_ids = list(set(e.tender_id for e in evaluations if e.tender_id))
-        
-        bidders = {b.id: b for b in db.query(Bidder).filter(Bidder.id.in_(bidder_ids)).all()} if bidder_ids else {}
-        tenders = {t.id: t for t in db.query(Tender).filter(Tender.id.in_(tender_ids)).all()} if tender_ids else {}
+        bidder_ids = list(set(e.bidder_id for e in evaluations))
+        tender_ids = list(set(e.tender_id for e in evaluations))
+        bidders = {b.id: b for b in db.query(Bidder).filter(Bidder.id.in_(bidder_ids)).all()}
+        tenders = {t.id: t for t in db.query(Tender).filter(Tender.id.in_(tender_ids)).all()}
         
         results = []
         for e in evaluations:
@@ -433,14 +513,50 @@ def get_evaluations(db: Session = Depends(get_db)):
                 "bidder_name": bidder.company_name if bidder else f"Bidder #{e.bidder_id}",
                 "tender_title": tender.title if tender else f"Tender #{e.tender_id}",
                 "status": e.status or "PENDING",
-                "ai_score": int(e.confidence_score) if e.confidence_score is not None else 0,
-                "risk_level": e.risk_level or "LOW",
+                "ai_score": int(e.total_score) if e.total_score is not None else 0,
+                "confidence": e.confidence or 0.0,
                 "submission_date": e.created_at.strftime("%b %d, %H:%M") if e.created_at else "Recent"
             })
         return results
     except Exception as e:
         logger.error(f"❌ Evaluations fetch failed: {e}")
         return []
+
+@api_router.get("/evaluation-report/{id}")
+async def get_evaluation_report(id: int, db: Session = Depends(get_db)):
+    try:
+        evaluation = db.query(Evaluation).filter(Evaluation.id == id).first()
+        if not evaluation:
+            raise HTTPException(status_code=404, detail="Evaluation not found")
+        
+        details = db.query(EvaluationDetail).filter(EvaluationDetail.evaluation_id == id).all()
+        
+        results = []
+        for d in details:
+            criterion = db.query(Criterion).filter(Criterion.id == d.criterion_id).first()
+            results.append({
+                "criterion_name": criterion.title if criterion else "Unknown Criterion",
+                "status": d.status,
+                "extracted_value": d.bidder_value,
+                "confidence": d.confidence,
+                "source_snippet": d.source,
+                "reasoning": d.explanation,
+                "score": d.score
+            })
+            
+        return {
+            "id": evaluation.id,
+            "bidder_id": evaluation.bidder_id,
+            "tender_id": evaluation.tender_id,
+            "overall_status": evaluation.status,
+            "confidence": evaluation.confidence,
+            "total_score": evaluation.total_score,
+            "results": results,
+            "summary": f"Evaluation completed with overall status: {evaluation.status}"
+        }
+    except Exception as e:
+        logger.error(f"❌ Error fetching report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.get("/admin/documents")
@@ -706,6 +822,7 @@ async def save_review(data: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+<<<<<<< HEAD
 @api_router.get("/tenders/{tender_id}/summarize")
 async def summarize_tender(tender_id: int, db: Session = Depends(get_db)):
     from models import Tender, Criterion
@@ -742,6 +859,79 @@ async def summarize_tender(tender_id: int, db: Session = Depends(get_db)):
             "Technical and financial thresholds are ready for review.",
             "Please check the detailed matrix below for specifics."
         ]}
+=======
+@api_router.post("/ask-ai")
+async def ask_ai(data: dict, db: Session = Depends(get_db)):
+    question = data.get("question", "")
+    # Role detection: prioritize data['role'], then look up current mock user
+    role = data.get("role")
+    if not role:
+        user = db.query(User).filter(User.role.in_(['admin', 'official', 'officer'])).first()
+        role = user.role if user else "bidder"
+
+    try:
+        logger.info(f"🤖 SHAKTI AI: Analyzing context for question: '{question}' (Role: {role})")
+        
+        # 1. Fetch Context: Tenders & Criteria
+        tenders = db.query(Tender).all()
+        tenders_data = []
+        for t in tenders:
+            tenders_data.append({
+                "id": t.id,
+                "title": t.title,
+                "status": t.status,
+                "criteria_summary": t.criteria # This is the JSON blob from AI extraction
+            })
+            
+        # 2. Fetch Context: Bidders & Evaluations
+        evaluations = db.query(Evaluation).all()
+        evals_data = []
+        for ev in evaluations:
+            details_list = []
+            for d in ev.details:
+                details_list.append({
+                    "criterion": d.criterion.title if d.criterion else "Unknown",
+                    "status": d.status,
+                    "extracted_value": d.bidder_value,
+                    "reasoning": d.explanation
+                })
+            
+            evals_data.append({
+                "bidder_name": ev.bidder.name if ev.bidder else "Unknown",
+                "tender_title": ev.tender.title if ev.tender else "Unknown",
+                "overall_status": ev.status,
+                "total_score": ev.total_score,
+                "confidence": ev.confidence,
+                "evaluation_details": details_list
+            })
+
+        context = {
+            "tenders": tenders_data,
+            "evaluations": evals_data,
+            "bidders": [{"name": b.name, "status": b.status} for b in db.query(Bidder).all()]
+        }
+
+        # 3. Call AIService with dynamic context
+        ai_response = await AIService().chat_with_context(question, context, role=role)
+        
+        # 4. Audit Log
+        db.add(AuditLog(
+            action="AI_CHAT_INTERACTION",
+            details={"question": question, "role": role, "confidence": ai_response.get("confidence")}
+        ))
+        db.commit()
+        
+        return ai_response
+
+    except Exception as e:
+        logger.error(f"❌ Chat API Error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "answer": "I'm having trouble accessing the system data right now. Please try again in a moment.",
+            "confidence": 0,
+            "source": "System Error"
+        }
+>>>>>>> e45c444 (my local changes)
 
 # Redundant route removed (superseded by line 1200 implementation)
 
@@ -913,16 +1103,93 @@ async def extract_criteria(tender_id: int, db: Session = Depends(get_db)):
     3. Saves unique criteria to database.
     """
     try:
+<<<<<<< HEAD
+=======
+        tender_id = data.get("tender_id")
+        force_reextract = data.get("force", False)
+>>>>>>> e45c444 (my local changes)
         if not tender_id:
-            return JSONResponse(status_code=400, content={"success": False, "error": "Tender ID is required"})
+            return {"success": False, "error": "Tender ID is required"}
         
+<<<<<<< HEAD
+=======
+        try:
+            tender_id = int(tender_id)
+        except (ValueError, TypeError):
+             return {"success": False, "error": "Invalid Tender ID format"}
+
+>>>>>>> e45c444 (my local changes)
         tender = db.query(Tender).filter(Tender.id == tender_id).first()
         if not tender:
-            return JSONResponse(status_code=404, content={"success": False, "error": f"Tender #{tender_id} not found"})
+            return {"success": False, "error": f"Tender #{tender_id} not found"}
 
+<<<<<<< HEAD
         # CLEAR OLD CRITERIA to ensure a truly dynamic fresh start
         db.query(Criterion).filter(Criterion.tender_id == tender_id).delete(synchronize_session=False)
         db.commit()
+=======
+        # 1. Get criteria from tender record or run extraction
+        criteria_json = tender.criteria
+        
+        # Force re-extraction if requested or if json is empty/generic
+        if force_reextract or not criteria_json or tender.status == "processing":
+            logger.info(f"⏳ {'FORCED ' if force_reextract else ''}AI Extraction triggered for Tender {tender_id}")
+
+            # Resolve the stored path using our robust helper
+            file_path = resolve_upload_path(tender.file_path)
+            logger.info(f"📂 Stored path: {tender.file_path!r}")
+            logger.info(f"📂 Resolved path: {file_path} | Exists: {os.path.exists(file_path)}")
+
+            if not os.path.exists(file_path):
+                return {
+                    "success": False,
+                    "error": (
+                        f"Tender document not found on server. "
+                        f"The file '{os.path.basename(tender.file_path)}' is missing. "
+                        f"Please re-upload this tender document."
+                    )
+                }
+
+            try:
+                result = await asyncio.wait_for(process_tender_upload(file_path), timeout=90.0)
+            except asyncio.TimeoutError:
+                return {"success": False, "error": "AI analysis timed out (>90s). Please try again."}
+            except Exception as e:
+                logger.error(f"❌ process_tender_upload failed: {e}")
+                logger.error(traceback.format_exc())
+                return {"success": False, "error": str(e)}
+
+            criteria_json = result.get('criteria', {})
+            
+            if not criteria_json or not isinstance(criteria_json.get("criteria"), list) or len(criteria_json.get("criteria", [])) == 0:
+                 return {
+                     "success": True,
+                     "data": [],
+                     "message": "No criteria found in document"
+                 }
+            
+            tender.criteria = criteria_json
+            tender.status = "active"
+            db.commit()
+
+        # Safety: ensure criteria_json is a dict with a "criteria" key
+        if not isinstance(criteria_json, dict):
+            criteria_json = {}
+        logger.info(f"📊 AI Extraction Result for {tender_id}: {json.dumps(criteria_json)[:500]}...")
+
+        # 2. CLEAR EXISTING CRITERIA for this tender to prevent duplicates and stale hardcoded data
+        db.query(Criterion).filter(Criterion.tender_id == tender_id).delete()
+        db.commit()
+
+        # 3. Map JSON results to structured Criterion records
+        items = criteria_json.get("criteria", [])
+        if not items:
+            return {
+                "success": True,
+                "data": [],
+                "message": "No criteria found in document"
+            }
+>>>>>>> e45c444 (my local changes)
 
         # 1. DUAL-PATH EXTRACTION: Visual (for layout) + Text (for rules)
         image_parts = []
@@ -975,6 +1242,7 @@ async def extract_criteria(tender_id: int, db: Session = Depends(get_db)):
         
         # 3. PROCESS RESULTS
         new_count = 0
+<<<<<<< HEAD
         
         # Flatten all categories from AI response
         all_ai_criteria = []
@@ -1014,9 +1282,29 @@ async def extract_criteria(tender_id: int, db: Session = Depends(get_db)):
                 )
                 db.add(new_c)
                 new_count += 1
+=======
+        for item in items:
+            title = item.get("title") or item.get("name") or "Unnamed Requirement"
+            description = item.get("requirement") or item.get("description") or ""
+            cat_name = item.get("category", "General")
+            
+            new_c = Criterion(
+                tender_id=tender_id,
+                title=title,
+                category=cat_name,
+                description=description,
+                mandatory=item.get("mandatory", True),
+                value=str(item.get("value") or item.get("threshold") or ""),
+                confidence=float(item.get("confidence", 0.95))
+            )
+            db.add(new_c)
+            new_count += 1
+>>>>>>> e45c444 (my local changes)
         
         db.commit()
+        logger.info(f"✅ Successfully saved {new_count} new criteria for Tender {tender_id}")
         
+<<<<<<< HEAD
         # Fetch fresh list and serialize
         all_criteria = db.query(Criterion).filter(Criterion.tender_id == tender_id).order_by(Criterion.id.desc()).all()
         
@@ -1362,3 +1650,137 @@ def get_my_submissions(bidder_id: int, db: Session = Depends(get_db)):
             "submitted_at": eval_rec.created_at.strftime("%Y-%m-%d") if eval_rec.created_at else "Recent"
         })
     return submissions
+=======
+        # 4. Return full list for UI
+        all_criteria = db.query(Criterion).filter(Criterion.tender_id == tender_id).order_by(Criterion.id.asc()).all()
+        return {"success": True, "count": new_count, "data": all_criteria}
+    except Exception as e:
+        print("❌ ERROR:", str(e))
+        logger.error(f"❌ AI EXTRACTION FAILED: {e}")
+        logger.error(traceback.format_exc())
+        return {"success": False, "error": str(e)}
+
+# ==================================================
+# PROFILE MANAGEMENT
+# ==================================================
+
+class ProfileUpdate(BaseModel):
+    name: str = None
+    email: str = None
+    phone: str = None
+    department: str = None
+    designation: str = None
+    bio: str = None
+
+@api_router.get("/profile")
+async def get_profile(db: Session = Depends(get_db)):
+    # Mock authentication: Get the first admin/official or create one
+    user = db.query(User).filter(User.role.in_(['admin', 'official', 'officer'])).first()
+    if not user:
+        # Create a default officer if none exists
+        user = User(
+            name="Radhika Gupta",
+            username="radhika_admin",
+            email="radhika@shakti.gov.in",
+            password="hashed_password", 
+            role="official",
+            designation="Chief Procurement Officer",
+            department="Department of Expenditure",
+            phone="+91 9876543210",
+            bio="Leading the digital transformation of procurement at Shakti AI."
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "phone": user.phone,
+        "department": user.department,
+        "designation": user.designation,
+        "bio": user.bio,
+        "profile_picture": user.profile_picture,
+        "created_at": user.created_at.isoformat() if user.created_at else None
+    }
+
+@api_router.get("/debug/migrate")
+async def debug_migrate(db: Session = Depends(get_db)):
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.get_bind())
+        cols = [c['name'] for c in inspector.get_columns("users")]
+        if "profile_picture" not in cols:
+            db.execute(text("ALTER TABLE users ADD COLUMN profile_picture TEXT"))
+            db.commit()
+            return {"status": "success", "message": "Added profile_picture column"}
+        return {"status": "skipped", "message": "Column already exists"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@api_router.post("/profile/upload-picture")
+async def upload_profile_picture(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        logger.info(f"📸 Starting profile picture upload: {file.filename}")
+        user = db.query(User).filter(User.role.in_(['admin', 'official', 'officer'])).first()
+        if not user:
+            logger.info("➕ No officer found during upload. Creating default profile...")
+            user = User(
+                name="Radhika Gupta",
+                username="radhika_admin",
+                email="radhika@shakti.gov.in",
+                password="hashed_password", 
+                role="official",
+                designation="Chief Procurement Officer",
+                department="Department of Expenditure",
+                phone="+91 9876543210",
+                bio="Leading the digital transformation of procurement at Shakti AI."
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        
+        file_id = str(uuid.uuid4())
+        file_ext = os.path.splitext(file.filename)[1]
+        file_name = f"profile_{user.id}_{file_id}{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, file_name)
+        
+        logger.info(f"📂 Saving to: {file_path}")
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Store with forward slashes for URL compatibility
+        stored_path = f"uploads/{file_name}"
+        user.profile_picture = stored_path
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(f"✅ Upload successful: {stored_path}")
+        return {"success": True, "profile_picture": stored_path}
+    except Exception as e:
+        logger.error(f"❌ Upload failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/profile")
+async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.role.in_(['admin', 'official', 'officer'])).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    if data.name is not None: user.name = data.name
+    if data.email is not None: user.email = data.email
+    if data.phone is not None: user.phone = data.phone
+    if data.department is not None: user.department = data.department
+    if data.designation is not None: user.designation = data.designation
+    if data.bio is not None: user.bio = data.bio
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {"success": True, "message": "Profile updated successfully", "data": user}
+>>>>>>> e45c444 (my local changes)

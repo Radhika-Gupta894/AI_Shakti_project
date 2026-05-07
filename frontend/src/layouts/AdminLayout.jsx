@@ -19,6 +19,7 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import { apiService, API_BASE_URL } from '../services/api';
 
 const Sidebar = ({ isOpen, toggle }) => {
   const location = useLocation();
@@ -30,6 +31,7 @@ const Sidebar = ({ isOpen, toggle }) => {
     { name: 'Bidder Evaluation', path: '/admin/evaluations', icon: UserCheck },
     { name: 'Fraud Detection', path: '/admin/fraud', icon: ShieldAlert },
     { name: 'Reports & Audit', path: '/admin/audit', icon: History },
+    { name: 'Official Profile', path: '/admin/profile', icon: Settings },
   ];
 
   return (
@@ -100,7 +102,11 @@ const Sidebar = ({ isOpen, toggle }) => {
 };
 
 const Header = ({ toggle }) => {
-  const [user, setUser] = useState({ username: 'Admin User', city: 'CRPF Officer' });
+  const [user, setUser] = useState({ 
+    username: 'Admin User', 
+    city: 'Procurement Dept',
+    avatar: ''
+  });
   const location = useLocation();
 
   useEffect(() => {
@@ -160,19 +166,27 @@ const Header = ({ toggle }) => {
             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <Link to="/admin/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="hidden sm:block text-right">
               <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">{user?.username || 'Admin'}</p>
               <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{user?.city || 'Officer'}</p>
             </div>
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
-              <img 
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=1e293b&color=fff&bold=true`} 
-                alt="Avatar" 
-                className="w-full h-full object-cover"
-              />
+              {user.avatar ? (
+                <img 
+                  src={`${API_BASE_URL}/${user.avatar}`} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <img 
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || 'Admin')}&background=1e293b&color=fff&bold=true`} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </header>

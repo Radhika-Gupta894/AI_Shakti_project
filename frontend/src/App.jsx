@@ -13,6 +13,7 @@ import ManualReview from './pages/ManualReview';
 import FraudDetection from './pages/FraudDetection';
 import FinalReport from './pages/FinalReport';
 import AuditLogs from './pages/AuditLogs';
+import Profile from './pages/Profile';
 
 // Bidder Pages
 import ApplyTender from './pages/ApplyTender';
@@ -38,6 +39,7 @@ function App() {
         <Route path="/admin/fraud" element={<FraudDetection />} />
         <Route path="/admin/audit" element={<AuditLogs />} />
         <Route path="/admin/report" element={<FinalReport />} />
+        <Route path="/admin/profile" element={<Profile />} />
 
         {/* Bidder Routes */}
         <Route path="/bidder/dashboard" element={<BidderStatus />} />

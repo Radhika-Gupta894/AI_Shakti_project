@@ -36,6 +36,17 @@ def fix_db():
                 conn.execute(text("ALTER TABLE criteria ADD COLUMN max_score FLOAT DEFAULT 100.0"))
                 conn.commit()
                 print("✅ Added 'max_score'.")
+
+            print("📡 Checking columns for table 'users'...")
+            for col in ["phone", "department", "designation", "bio", "profile_picture"]:
+                try:
+                    conn.execute(text(f"SELECT {col} FROM users LIMIT 1"))
+                    print(f"✅ '{col}' column already exists.")
+                except Exception:
+                    print(f"➕ Adding '{col}' column...")
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} TEXT"))
+                    conn.commit()
+                    print(f"✅ Added '{col}'.")
                 
             print("🚀 Database schema update complete!")
             

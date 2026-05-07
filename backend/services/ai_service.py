@@ -95,15 +95,10 @@ class AIService:
         """
         if not text or len(text.strip()) < 10:
             logger.warning("⚠️ No text provided for criteria extraction. Returning empty structure.")
-            return {
-                "technical_criteria": [],
-                "financial_criteria": [],
-                "compliance_criteria": [],
-                "deadlines": [],
-                "warning": "No text could be extracted from the document. Please check OCR/Tesseract."
-            }
+            return {"criteria": []}
             
         prompt = f"""
+<<<<<<< HEAD
         System: You are an expert procurement analyst for the CRPF (Central Reserve Police Force). 
         Task: Extract specific eligibility criteria from the provided tender document text.
         
@@ -129,32 +124,84 @@ class AIService:
                 {{"event": "string", "date": "string"}}
             ]
         }}
+=======
+You are a government tender analysis expert.
+>>>>>>> e45c444 (my local changes)
 
-        Tender Text Content:
-        ---
-        {text[:15000]}
-        ---
-        """
+Analyze the following tender document text and extract ALL eligibility criteria mentioned in it.
+
+Tender Document:
+{text[:150000]}
+
+INSTRUCTIONS:
+- ONLY extract criteria that are clearly present in the document
+- DO NOT assume or invent anything
+- Look for:
+  - financial requirements (turnover, revenue)
+  - technical requirements (projects, experience)
+  - compliance (GST, certificates)
+  - eligibility conditions
+
+- If criteria are scattered, collect all of them
+- If values exist (₹, years, count), include them
+
+OUTPUT STRICT JSON:
+
+{{
+  "criteria": [
+    {{
+      "title": "string",
+      "category": "Technical / Financial / Compliance / Other",
+      "requirement": "full sentence from document",
+      "value": "extracted value if available",
+      "mandatory": true/false,
+      "confidence": 0.0-1.0
+    }}
+  ]
+}}
+
+IMPORTANT:
+- If document has NO clear criteria, return:
+{{
+  "criteria": []
+}}
+
+- DO NOT create fake criteria
+- DO NOT explain anything outside JSON
+"""
         
         try:
             response = await self.model.generate_content_async(prompt)
             content = response.text
-            # Clean possible markdown formatting from response
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
+            try:
+                # Remove any leading/trailing non-json content (sometimes Gemini prepends text)
+                content_clean = content.strip()
+                if content_clean.startswith("```json"):
+                    content_clean = content_clean[7:]
+                if content_clean.endswith("```"):
+                    content_clean = content_clean[:-3]
                 
-            return json.loads(content.strip())
+                # sometimes it might not have ```json but still have text before the first {
+                start_idx = content_clean.find('{')
+                end_idx = content_clean.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    content_clean = content_clean[start_idx:end_idx+1]
+
+                parsed = json.loads(content_clean)
+                
+                # if criteria is not in parsed, wrap it
+                if "criteria" not in parsed:
+                    if isinstance(parsed, list):
+                        parsed = {"criteria": parsed}
+                    else:
+                        parsed = {"criteria": [parsed]}
+            except Exception as e:
+                logger.error(f"❌ JSON Parsing failed in extract_tender_criteria. Error: {e}\nContent was: {content}")
+                parsed = {"criteria": [], "raw": content.strip()}
+            return parsed
         except Exception as e:
-            print(f"AI Extraction Error: {e}")
-            return {
-                "technical_criteria": [],
-                "financial_criteria": [],
-                "compliance_criteria": [],
-                "deadlines": [],
-                "error": "Failed to parse AI response"
-            }
+            logger.error(f"AI Extraction Error: {e}")
+            return {"criteria": [], "raw": str(e)}
 
     async def evaluate_bidder_docs(self, criteria: Dict[str, Any], bidder_text: str) -> Dict[str, Any]:
         self._ensure_initialized()
@@ -269,6 +316,161 @@ class AIService:
         except Exception as e:
             print(f"Fraud Detection Error: {e}")
             return {"fraud_alerts": [], "overall_collusion_risk": 0}
+
+    async def chat_with_context(self, question: str, context: Dict[str, Any], role: str = "admin") -> Dict[str, Any]:
+        self._ensure_initialized()
+        
+        prompt = f"""
+You are SHAKTI AI – an advanced AI Procurement Agent for government tender analysis.
+
+Your role is to intelligently analyze tender documents, extract eligibility criteria, evaluate bidders, suggest improvements, and answer user questions in a conversational way like ChatGPT.
+
+==================================================
+CORE CAPABILITIES
+==================================================
+
+You can:
+1. Analyze tender documents
+2. Extract eligibility criteria
+3. Classify criteria (Technical / Financial / Compliance / Experience)
+4. Identify mandatory vs optional conditions
+5. Summarize tender documents
+6. Suggest missing or improved criteria
+7. Evaluate bidder eligibility
+8. Explain decisions clearly
+9. Answer any user question intelligently
+
+==================================================
+AVAILABLE DATA (CONTEXT)
+==================================================
+
+Tender Data:
+{json.dumps(context.get('tenders', []), indent=2)}
+
+Bidder Data:
+{json.dumps(context.get('bidders', []), indent=2)}
+
+Evaluation Results:
+{json.dumps(context.get('evaluations', []), indent=2)}
+
+User Role:
+{role}
+
+User Question:
+{question}
+
+==================================================
+INSTRUCTIONS (VERY IMPORTANT)
+==================================================
+
+- Always use the provided data to answer
+- Do NOT give generic or fixed answers
+- Do NOT assume missing information
+- If data is missing, say: "Not enough information available"
+- Be clear, structured, and professional
+- Provide reasoning for every answer
+- Compare required vs actual values when evaluating
+- Be conversational but accurate
+
+==================================================
+TASK DETECTION LOGIC
+==================================================
+
+Based on the user question, decide the task:
+
+IF question is about summary:
+→ Provide a clear tender summary
+
+IF question is about criteria:
+→ Extract and list criteria properly
+
+IF question is about suggestion:
+→ Suggest missing/improved criteria
+
+IF question is about evaluation:
+→ Explain eligibility decision with reasons
+
+IF question is general:
+→ Answer conversationally using available data
+
+==================================================
+OUTPUT FORMATS
+==================================================
+
+For the "answer" field in your JSON response, format the text according to the task:
+
+1. SUMMARY:
+"Summary:
+This tender is for...
+Key requirements include..."
+
+2. CRITERIA EXTRACTION:
+"Extracted Criteria:
+1. Financial: ₹5 Cr turnover (Mandatory)
+2. Compliance: GST Registration (Mandatory)
+3. Technical: 3 similar projects (Mandatory)"
+
+3. SUGGESTED CRITERIA (VERY IMPORTANT FEATURE):
+"Suggested Improvements:
+- Add ISO certification requirement
+- Add past government experience
+- Add financial audit condition"
+
+4. EVALUATION EXPLANATION:
+"Evaluation Result:
+Bidder is NOT eligible because:
+- Required turnover: ₹5 Cr
+- Bidder turnover: ₹3 Cr (Below requirement)
+GST requirement is satisfied."
+
+5. GENERAL CHAT RESPONSE:
+Answer naturally like ChatGPT but based ONLY on data.
+
+==================================================
+IMPORTANT RULES
+==================================================
+
+- Never return empty response
+- Never hallucinate fake data
+- Always stick to given context
+- Always explain reasoning
+- Keep answers relevant and useful
+
+==================================================
+FINAL GOAL
+==================================================
+
+✔ Dynamic AI (not hardcoded)
+✔ Works for ANY tender
+✔ Gives different results for different data
+✔ Fully explainable system
+✔ Professional government-grade AI assistant
+
+==================================================
+RESPONSE FORMAT
+==================================================
+Return ONLY a valid JSON object in this exact format:
+{{
+  "answer": "Your dynamic response based on the rules and formatted according to the TASK DETECTION LOGIC",
+  "confidence": 0.95
+}}
+"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            content = response.text
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            
+            return json.loads(content.strip())
+        except Exception as e:
+            logger.error(f"❌ Chat AI Error: {e}")
+            return {
+                "answer": "Not enough data available to answer this question.",
+                "confidence": 0
+            }
 
 # Final confirmation that the service module loaded without syntax errors
 logger.info("✅ AI Service module parsed and loaded successfully.")

@@ -223,12 +223,18 @@ const BidderEvaluationContent = () => {
                             </>
                           )}
 
-                          {evalRecord.status === 'SUBMITTED' && (
-                             <button onClick={() => handleRunEvaluation(evalRecord.tender_id, evalRecord.bidder_id)} title="Run AI Evaluation" className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"><PlayCircle size={16} /></button>
-                          )}
+                          {/* Run/Re-run Evaluation */}
+                          <button 
+                            onClick={() => handleRunEvaluation(evalRecord.tender_id, evalRecord.bidder_id)} 
+                            title={evalRecord.status === 'SUBMITTED' ? "Run AI Evaluation" : "Re-run AI Evaluation"} 
+                            className={`p-2 rounded-lg transition-colors ${evalRecord.status === 'SUBMITTED' ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                          >
+                            <PlayCircle size={16} />
+                          </button>
 
-                          {(evalRecord.status === 'PASS' || evalRecord.status === 'FAIL') && (
-                            <button onClick={() => handleManualReview(evalRecord.id)} title="Send to Manual Review" className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"><AlertTriangle size={16} /></button>
+                          {/* Quick Decision Actions */}
+                          {(evalRecord.status === 'PASS' || evalRecord.status === 'FAIL' || evalRecord.status === 'REVIEW' || evalRecord.status === 'Eligible' || evalRecord.status === 'Not Eligible' || evalRecord.status === 'Needs Manual Review') && (
+                            <button onClick={() => handleManualReview(evalRecord.id)} title="Flag for Manual Review" className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"><AlertTriangle size={16} /></button>
                           )}
 
                           {/* View Explainability */}

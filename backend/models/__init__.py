@@ -2,7 +2,7 @@ from database.base import Base
 from .user import User
 from .tender import Tender
 from .bidder import Bidder, BidderDocument
-from .evaluation import Evaluation
+from .evaluation import Evaluation, EvaluationDetail
 from .audit_log import AuditLog
 from .fraud_alert import FraudAlert
 from .manual_review import ManualReview
